@@ -14,7 +14,11 @@ Include a minimal reproducible example (reprex). If you've never hear of a [repr
 If you have a question use https://stackoverflow.com/ instead of this form.
 
 ---
-Brief description
+**Problem:**
+
+**Steps to reproduce this behaviour:**
 ```r
 # reprex
 ```
+
+**Expected output/desired solution:**
