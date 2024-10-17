@@ -1,13 +1,13 @@
 ---
-name: Bug report or feature request
-about: Describe a bug you've seen or make a case for a new feature.
+name: Bug report
+about: Describe a bug you've seen.
 title: ''
-labels: ''
+labels: 'Type: Bug'
 assignees: ''
 
 ---
 
-Briefly describe your problem, steps to reproduce this behaviour, and your expected output or desired solution.
+Briefly describe your problem, steps to reproduce this behaviour, and your expected output.
 
 Include a minimal reproducible example (reprex). If you've never hear of a [reprex](https://reprex.tidyverse.org/) before start by reading https://www.tidyverse.org/help/#reprex.
 
