@@ -1,0 +1,7 @@
+{
+  "name": "fledge tag-on-merge",
+  "description": "Companion to fledge-bump: tags the dev version on main once a release-path fledge-bump PR merges.",
+  "iconName": "octicon git-merge",
+  "categories": ["R"],
+  "filePatterns": ["DESCRIPTION$", "NEWS\\.md$"]
+}
