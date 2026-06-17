@@ -66,7 +66,7 @@ gh_try() {
 # Fetch a file's raw content from the default branch, empty if absent (or unreachable).
 raw() { gh_try gh api -H "Accept: application/vnd.github.raw" "repos/$ORG/$1/contents/$2" || true; }
 
-std=0 skip=0 act=0 jags=0 manualroute=0
+std=0 skip=0 act=0 jags=0 manualroute=0 failed=""
 
 while IFS= read -r repo; do
   [ -n "$repo" ] || continue
@@ -129,21 +129,22 @@ EOF
 
   echo "APPLY $repo (jags=$need_jags route=$route)"
   work=$(mktemp -d)
-  git clone -q --depth 1 "git@github.com:$ORG/$repo.git" "$work/$repo"
-  cd "$work/$repo"
-  git checkout -b "$BRANCH" -q
-  # preserve the fledge callers
-  tmpk=$(mktemp -d)
-  for k in fledge-bump.yml fledge-tag-on-merge.yml; do
-    [ -f ".github/workflows/$k" ] && cp ".github/workflows/$k" "$tmpk/"
-  done
-  rm -rf .github/workflows && mkdir -p .github/workflows
-  if $need_jags; then cp "$tpl/R-CMD-check-jags.yaml" .github/workflows/R-CMD-check.yaml
-  else cp "$tpl/R-CMD-check.yaml" .github/workflows/R-CMD-check.yaml; fi
-  cp "$tpl/pkgdown.yaml" "$tpl/test-coverage.yaml" .github/workflows/
-  cp "$tmpk"/*.yml .github/workflows/ 2>/dev/null || true
-  git add -A
-  git commit -q -F - <<'MSG'
+  if (
+    set -e
+    git clone -q --depth 1 "git@github.com:$ORG/$repo.git" "$work/$repo"
+    cd "$work/$repo"
+    git checkout -b "$BRANCH" -q
+    tmpk="$work/.keep"; mkdir -p "$tmpk"
+    for k in fledge-bump.yml fledge-tag-on-merge.yml; do
+      [ -f ".github/workflows/$k" ] && cp ".github/workflows/$k" "$tmpk/"
+    done
+    rm -rf .github/workflows && mkdir -p .github/workflows
+    if $need_jags; then cp "$tpl/R-CMD-check-jags.yaml" .github/workflows/R-CMD-check.yaml
+    else cp "$tpl/R-CMD-check.yaml" .github/workflows/R-CMD-check.yaml; fi
+    cp "$tpl/pkgdown.yaml" "$tpl/test-coverage.yaml" .github/workflows/
+    cp "$tmpk"/*.yml .github/workflows/ 2>/dev/null || true
+    git add -A
+    git commit -q -F - <<'MSG'
 Standardize GitHub Actions to the core set
 
 Reduce .github/workflows to the standard Poisson Consulting set (R-CMD-check,
@@ -152,29 +153,35 @@ old fledge.yaml superseded by fledge-bump.yml.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 MSG
-  git push -q -u origin "$BRANCH"
+    git push -q -u --force origin "$BRANCH"
 
-  body="Reduces this package's CI to the standard Poisson Consulting set: \`R-CMD-check.yaml\`, \`pkgdown.yaml\`, \`test-coverage.yaml\` (r-lib/actions@v2$( $need_jags && echo ', JAGS variant' )), plus the unchanged \`fledge-bump.yml\` / \`fledge-tag-on-merge.yml\`. Removes all other workflows and custom action directories, and the old \`fledge.yaml\` (superseded by \`fledge-bump.yml\`). CODEOWNERS and community-health files untouched."
-  default=$(gh api "repos/$ORG/$repo" --jq '.default_branch')
-  if [ "$owner" = "joethorley" ]; then
-    gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
-      --title "Standardize GitHub Actions to the core set" --body "$body" >/dev/null
-  else
-    iss=$(gh issue create --repo "$ORG/$repo" \
-      --title "Standardize GitHub Actions to the core Poisson set" \
-      --body "$body" --jq '.number' 2>/dev/null || true)
-    pr=$(gh pr create --repo "$ORG/$repo" --draft --base "$default" --head "$BRANCH" \
-      --title "Standardize GitHub Actions to the core set" \
-      ${owner:+--assignee "$owner"} \
-      --body "${iss:+Closes #$iss.
+    body="Reduces this package's CI to the standard Poisson Consulting set: \`R-CMD-check.yaml\`, \`pkgdown.yaml\`, \`test-coverage.yaml\` (r-lib/actions@v2$( $need_jags && echo ', JAGS variant' )), plus the unchanged \`fledge-bump.yml\` / \`fledge-tag-on-merge.yml\`. Removes all other workflows and custom action directories, and the old \`fledge.yaml\` (superseded by \`fledge-bump.yml\`). CODEOWNERS and community-health files untouched."
+    default=$(gh api "repos/$ORG/$repo" --jq '.default_branch')
+    if [ "$owner" = "joethorley" ]; then
+      gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
+        --title "Standardize GitHub Actions to the core set" --body "$body" >/dev/null
+    else
+      iss=$(gh issue create --repo "$ORG/$repo" \
+        --title "Standardize GitHub Actions to the core Poisson set" \
+        --body "$body" --jq '.number' 2>/dev/null || true)
+      pr=$(gh pr create --repo "$ORG/$repo" --draft --base "$default" --head "$BRANCH" \
+        --title "Standardize GitHub Actions to the core set" \
+        ${owner:+--assignee "$owner"} \
+        --body "${iss:+Closes #$iss.
 
 }$body")
-    [ -n "$owner" ] && gh pr edit "$pr" --repo "$ORG/$repo" --add-reviewer "$owner" >/dev/null 2>&1 || true
+      [ -n "$owner" ] && gh pr edit "$pr" --repo "$ORG/$repo" --add-reviewer "$owner" >/dev/null 2>&1 || true
+    fi
+  ); then
+    echo "  done $repo"
+  else
+    echo "FAIL  $repo (transient -- re-run to retry; idempotent)"; failed="$failed $repo"
   fi
-  cd "$repo_root"; rm -rf "$work" "$tmpk"
+  rm -rf "$work"
 done < <(gh_try gh repo list "$ORG" --no-archived --source --limit 400 \
            --json name,defaultBranchRef --jq '.[] | select(.defaultBranchRef.name != null) | .name')
 
 echo
 echo "already standard: $std | to standardize: $act (jags: $jags, non-Joe-owned routed to issue+draft: $manualroute) | skipped: $skip"
+[ -n "$failed" ] && echo "FAILED (re-run to retry):$failed"
 $APPLY || echo "Dry run. Re-run with --apply (optionally with package names) to act."
