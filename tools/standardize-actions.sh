@@ -72,6 +72,9 @@ while IFS= read -r repo; do
   [ -n "$repo" ] || continue
   [ -n "$ONLY" ] && ! printf '%s\n' $ONLY | grep -qx "$repo" && continue
   case " $EXCLUDE " in *" $repo "*) continue ;; esac
+  # Bookdown books and docs sites carry a Package: DESCRIPTION + fledge NEWS but are not R
+  # packages; standardizing would wipe their book-build CI, so skip them.
+  case "$repo" in *-book|*-docs) continue ;; esac
 
   # Throttle to avoid secondary rate limiting (which manifests as spurious 404s).
   sleep 1
