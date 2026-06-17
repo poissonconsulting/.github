@@ -45,6 +45,12 @@ Fold these into the existing repo-governance settings.
 - Require a pull request, require review from Code Owners, and at least one approval, so the release path waits for the codeowner.
 - Repo -> Settings -> General -> Pull Requests -> Allow auto-merge, so `gh pr merge --auto` can arm.
 
+The bypass and code-owner-review changes can be applied to all packages at once with
+`tools/set-fledge-branch-protection.sh` (dry run by default, `--apply` to act, idempotent).
+Run it only after the App is installed (1a, 1b), since it adds the App to each bypass list.
+A dry run confirmed all 79 packages have a required-PR rule and none require signed commits.
+Auto-merge is already enabled on the packages checked, so it is not part of the script.
+
 Gate: nothing runs yet; safe to pause here indefinitely.
 
 ## Stage 2: validate headless fledge (the one real risk)
