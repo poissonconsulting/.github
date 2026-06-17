@@ -69,9 +69,17 @@ while IFS= read -r repo; do
   [ -n "$repo" ] || continue
   full="$ORG/$repo"
 
-  # R package? must have a root DESCRIPTION.
-  if ! gh api "repos/$full/contents/DESCRIPTION" --jq '.path' >/dev/null 2>&1; then
+  # R package? DESCRIPTION must have a Package: field (excludes bookdown books,
+  # websites and other repos that carry a DESCRIPTION but are not packages).
+  desc=$(gh api -H "Accept: application/vnd.github.raw" "repos/$full/contents/DESCRIPTION" 2>/dev/null || echo "")
+  if ! printf '%s\n' "$desc" | grep -q '^Package:'; then
     nonpkg=$((nonpkg + 1)); continue
+  fi
+  # Already fledge-managed? NEWS.md must carry the fledge banner; fledge::bump_version()
+  # requires a package that fledge has initialised.
+  news=$(gh api -H "Accept: application/vnd.github.raw" "repos/$full/contents/NEWS.md" 2>/dev/null || echo "")
+  if ! printf '%s\n' "$news" | grep -qi 'fledge'; then
+    echo "SKIP  $repo (not fledge-managed)"; skipped=$((skipped + 1)); continue
   fi
   # Already rolled out?
   if gh api "repos/$full/contents/.github/workflows/fledge-bump.yml" --jq '.path' >/dev/null 2>&1; then
