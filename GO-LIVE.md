@@ -37,19 +37,36 @@ Org -> Settings -> Secrets and variables -> Actions -> New organization secret.
 - `FLEDGE_APP_PRIVATE_KEY` = the full `.pem` contents including the BEGIN and END lines.
 - Grant both to the package repos (or all repos); `secrets: inherit` works because callers and engine are in the same org.
 
-### 1d. Branch settings on each package default branch
+### 1d. Let the App bypass the org ruleset (one org-level change)
 
-Fold these into the existing repo-governance settings.
+The default branch is protected by the organization ruleset **"Packages"** (id `17373396`),
+which already enforces "require a pull request", "require review from Code Owners", and one
+approval on `~DEFAULT_BRANCH` across all packages.
+So the only change needed is to let the App bypass it for the dev/auto path's direct push;
+the code-owner gate is already in place and does not need per-repo configuration.
 
-- Add `poisson-fledge-bot` to the push / required-PR bypass list so the dev path can push the bump and tag directly.
-- Require a pull request, require review from Code Owners, and at least one approval, so the release path waits for the codeowner.
-- Repo -> Settings -> General -> Pull Requests -> Allow auto-merge, so `gh pr merge --auto` can arm.
+Add the App (integration id `4076501`, also the value of `FLEDGE_APP_ID`) to the ruleset
+bypass list with mode **Always**:
 
-The bypass and code-owner-review changes can be applied to all packages at once with
-`tools/set-fledge-branch-protection.sh` (dry run by default, `--apply` to act, idempotent).
-Run it only after the App is installed (1a, 1b), since it adds the App to each bypass list.
-A dry run confirmed all 79 packages have a required-PR rule and none require signed commits.
-Auto-merge is already enabled on the packages checked, so it is not part of the script.
+- UI: Org -> Settings -> Rules -> Rulesets -> Packages -> Bypass list -> Add -> Apps -> `poisson-fledge-bot` -> Always.
+- API (preserves the existing repo-admin bypass):
+
+```sh
+gh api -X PATCH orgs/poissonconsulting/rulesets/17373396 --input - <<'JSON'
+{ "bypass_actors": [
+    {"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"},
+    {"actor_id":4076501,"actor_type":"Integration","bypass_mode":"always"}
+] }
+JSON
+```
+
+Auto-merge is already enabled on the package repos, so nothing more is required.
+The "Always" bypass enables the dev path's direct push but does not defeat the release path:
+a queued `gh pr merge --auto` still waits for the code-owner review (verified in Stage 2b).
+
+Note: `tools/set-fledge-branch-protection.sh` targets per-repo classic branch protection,
+which turned out to be redundant here because the org ruleset is the active control.
+Keep it only for repos that rely on classic protection instead of the ruleset.
 
 Gate: nothing runs yet; safe to pause here indefinitely.
 

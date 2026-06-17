@@ -57,11 +57,14 @@ The caller workflows forward these to the reusable workflows with `secrets: inhe
 
 ### 3. Branch protection and merge settings
 
-On each package's `main` (fold these into the existing repo-governance settings):
+The default branch is governed by the organization ruleset **"Packages"** (id `17373396`),
+which already requires a PR, code-owner review, and one approval on the default branch of all
+packages. Auto-merge is already enabled at the repo level. So the only setting to change is:
 
-- Add the app to the **bypass / allowed-to-push** list, so the dev path can push the bump commit and tag directly.
-- Enable **Require a pull request before merging** with **Require review from Code Owners** and at least one approval, so a release-path PR waits for the codeowner.
-- Enable **Allow auto-merge** at the repo level, so `gh pr merge --auto` can take effect.
+- Add the App to the **"Packages" ruleset bypass list** with mode **Always** (Org -> Settings -> Rules -> Rulesets -> Packages -> Bypass list -> Apps -> `poisson-fledge-bot`), so the dev path can push the bump commit and tag directly. This is one org-level change covering all packages. The "Always" bypass does not defeat the release path: a queued `gh pr merge --auto` still waits for the code-owner review.
+
+The App's integration id is `4076501` (the value of `FLEDGE_APP_ID`).
+Classic per-repo branch protection, if any, is redundant where the ruleset is the active control.
 
 ### 4. CODEOWNERS dependency
 
