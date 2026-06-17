@@ -53,12 +53,13 @@ echo
 # misclassify a repo, so this guards every read.
 gh_try() {
   local i out err; err=$(mktemp)
-  for i in 1 2 3 4 5; do
+  for i in 1 2 3 4 5 6; do
     if out=$("$@" 2>"$err"); then rm -f "$err"; printf '%s' "$out"; return 0; fi
-    grep -qiE '50[234]|bad gateway|gateway time|timeout|rate limit|abuse|temporarily|unexpected EOF' "$err" || { rm -f "$err"; return 1; }
+    # Only a clear "absent" is non-retryable; everything else is treated as transient.
+    if grep -qiE 'HTTP 404|Not Found|Could not resolve to' "$err"; then rm -f "$err"; return 1; fi
     sleep 3
   done
-  echo "WARN  transient API failure, gave up after retries: $*" >&2
+  echo "WARN  API failure, gave up after retries: $* :: $(tr '\n' ' ' < "$err" | tail -c 140)" >&2
   rm -f "$err"; return 2
 }
 
@@ -72,9 +73,14 @@ while IFS= read -r repo; do
   [ -n "$ONLY" ] && ! printf '%s\n' $ONLY | grep -qx "$repo" && continue
   case " $EXCLUDE " in *" $repo "*) continue ;; esac
 
-  # R package + fledge-managed?
-  printf '%s\n' "$(raw "$repo" DESCRIPTION)" | grep -q '^Package:' || continue
-  printf '%s\n' "$(raw "$repo" NEWS.md)" | grep -qi 'fledge' || continue
+  # Throttle to avoid secondary rate limiting (which manifests as spurious 404s).
+  sleep 1
+
+  # R package + fledge-managed? (fetch each file once and reuse below)
+  desc=$(raw "$repo" DESCRIPTION)
+  printf '%s\n' "$desc" | grep -q '^Package:' || continue
+  news=$(raw "$repo" NEWS.md)
+  printf '%s\n' "$news" | grep -qi 'fledge' || continue
 
   # Current workflow entries (files and dirs).
   entries=$(gh_try gh api "repos/$ORG/$repo/contents/.github/workflows" --jq '.[].name' || true)
@@ -99,7 +105,7 @@ EOF
 
   # JAGS needed?
   need_jags=false
-  if printf '%s\n' "$(raw "$repo" DESCRIPTION)" | grep -qiE 'jags|rjags|runjags|jagsUI|R2jags'; then need_jags=true; fi
+  if printf '%s\n' "$desc" | grep -qiE 'jags|rjags|runjags|jagsUI|R2jags'; then need_jags=true; fi
   if printf '%s\n' "$(raw "$repo" .github/workflows/R-CMD-check.yaml)" | grep -qi 'jags'; then need_jags=true; fi
   $need_jags && jags=$((jags+1))
 
