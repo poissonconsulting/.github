@@ -1,0 +1,71 @@
+# Reusable workflow: tag the dev version on main after a fledge-bump PR merges.
+#
+# Called by the per-package fledge-tag-on-merge caller (see workflow-templates/), which gates
+# on the merged PR coming from the `fledge-bump` branch. The release path of fledge-bump opens
+# a PR without pushing the tag (the tag must point at main, not the PR branch). Once merged,
+# this runs fledge::tag_version() to tag the merge commit and pushes the tag, which then drives
+# the package's release/pkgdown workflows.
+
+name: fledge-tag-on-merge
+
+on:
+  workflow_call:
+    inputs:
+      r-version:
+        description: R version used to run fledge.
+        type: string
+        default: release
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.FLEDGE_APP_ID }}
+          private-key: ${{ secrets.FLEDGE_APP_PRIVATE_KEY }}
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ inputs.r-version }}
+          use-public-rspm: true
+
+      - name: Install fledge
+        run: install.packages("fledge")
+        shell: Rscript {0}
+
+      - name: Configure git identity
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          bot_id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+          git config user.name "${SLUG}[bot]"
+          git config user.email "${bot_id}+${SLUG}[bot]@users.noreply.github.com"
+
+      - name: Tag merged version
+        run: |
+          set -euo pipefail
+          Rscript -e 'options(usethis.quiet = TRUE); fledge::tag_version()'
+          new_tag=$(git tag --points-at HEAD --list 'v*' | sort -V | tail -n1)
+          if [ -z "$new_tag" ]; then
+            echo "::error::fledge::tag_version() did not create a tag on main."
+            exit 1
+          fi
+          echo "Pushing tag ${new_tag}."
+          git push origin "refs/tags/${new_tag}"

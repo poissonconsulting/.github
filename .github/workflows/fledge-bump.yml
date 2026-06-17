@@ -1,0 +1,168 @@
+# Reusable workflow: daily fledge dev-version bump.
+#
+# Called by a thin caller workflow in each package (see workflow-templates/fledge-bump.yml).
+# Behaviour, keyed on the most recent v* tag:
+#   * last tag is a DEV version  (X.Y.Z.9XXX, 4 components) -> bump + NEWS + tag, pushed
+#     directly to main (the app is in the branch-protection bypass list).
+#   * last tag is a RELEASE version (X.Y.Z, 3 components)   -> open an auto-merge PR from the
+#     `fledge-bump` branch, assigned to the codeowner; the tag is created on main after merge
+#     by the companion fledge-tag-on-merge workflow.
+# Does nothing when there are no tags or no commits since the last tag.
+
+name: fledge-bump
+
+on:
+  workflow_call:
+    inputs:
+      r-version:
+        description: R version used to run fledge.
+        type: string
+        default: release
+      pr-branch:
+        description: Branch name used for the release-path bump PR.
+        type: string
+        default: fledge-bump
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  fledge-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.FLEDGE_APP_ID }}
+          private-key: ${{ secrets.FLEDGE_APP_PRIVATE_KEY }}
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Detect work and classify last tag
+        id: detect
+        run: |
+          set -euo pipefail
+          last_tag=$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)
+          if [ -z "$last_tag" ]; then
+            echo "No v* tag found; nothing to do."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          n=$(git rev-list "${last_tag}..HEAD" --count)
+          if [ "$n" -eq 0 ]; then
+            echo "No commits since ${last_tag}; nothing to do."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ver=${last_tag#v}
+          dots=$(printf '%s' "$ver" | tr -cd '.' | wc -c | tr -d ' ')
+          if [ "$dots" -ge 3 ]; then kind=dev; else kind=release; fi
+          echo "Last tag ${last_tag} (${ver}) -> ${kind} path; ${n} commit(s) since."
+          {
+            echo "run=true"
+            echo "kind=${kind}"
+            echo "last_tag=${last_tag}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup R
+        if: steps.detect.outputs.run == 'true'
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ inputs.r-version }}
+          use-public-rspm: true
+
+      - name: Install fledge
+        if: steps.detect.outputs.run == 'true'
+        run: install.packages("fledge")
+        shell: Rscript {0}
+
+      - name: Configure git identity
+        if: steps.detect.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          bot_id=$(gh api "/users/${SLUG}[bot]" --jq .id)
+          git config user.name "${SLUG}[bot]"
+          git config user.email "${bot_id}+${SLUG}[bot]@users.noreply.github.com"
+
+      - name: Dev bump (automatic, direct to main)
+        if: steps.detect.outputs.run == 'true' && steps.detect.outputs.kind == 'dev'
+        run: |
+          set -euo pipefail
+          Rscript -e 'options(usethis.quiet = TRUE); fledge::bump_version("dev")'
+          new_tag=$(git tag --points-at HEAD --list 'v*' | sort -V | tail -n1)
+          if [ -z "$new_tag" ]; then
+            echo "::error::fledge::bump_version() did not create a tag."
+            exit 1
+          fi
+          echo "Pushing dev bump and tag ${new_tag} to main."
+          git push origin HEAD:main
+          git push origin "refs/tags/${new_tag}"
+
+      - name: Release bump (auto-merge PR)
+        if: steps.detect.outputs.run == 'true' && steps.detect.outputs.kind == 'release'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_BRANCH: ${{ inputs.pr-branch }}
+          LAST_TAG: ${{ steps.detect.outputs.last_tag }}
+        run: |
+          set -euo pipefail
+          main_sha=$(git rev-parse origin/main)
+
+          existing=$(gh pr list --head "$PR_BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            git fetch origin "$PR_BRANCH" --quiet || true
+            base_parent=$(git rev-parse "origin/${PR_BRANCH}^" 2>/dev/null || echo "")
+            if [ "$base_parent" = "$main_sha" ]; then
+              echo "Open PR #${existing} already reflects current main; leaving it untouched."
+              exit 0
+            fi
+            echo "New commits on main since PR #${existing}; closing and recreating."
+            gh pr close "$existing" --delete-branch
+          fi
+
+          # fledge commits the NEWS/DESCRIPTION bump and creates the tag locally.
+          Rscript -e 'options(usethis.quiet = TRUE); fledge::bump_version("dev")'
+          new_tag=$(git tag --points-at HEAD --list 'v*' | sort -V | tail -n1)
+          if [ -z "$new_tag" ]; then
+            echo "::error::fledge::bump_version() did not create a tag."
+            exit 1
+          fi
+          ver=${new_tag#v}
+
+          # The tag belongs on main after merge, not on the PR branch.
+          git tag -d "$new_tag"
+          git push origin "HEAD:refs/heads/${PR_BRANCH}" --force
+
+          pr_url=$(gh pr create --base main --head "$PR_BRANCH" \
+            --title "Start dev cycle ${ver}" \
+            --body "Automated fledge dev bump to \`${ver}\`, the first development version after release \`${LAST_TAG}\`.
+
+          \`NEWS.md\` and \`DESCRIPTION\` were regenerated by fledge from commit messages since \`${LAST_TAG}\`. The \`${new_tag}\` tag is created on \`main\` by the companion *fledge-tag-on-merge* workflow once this PR merges.")
+          echo "Opened ${pr_url}"
+
+          owner=""
+          for f in .github/CODEOWNERS CODEOWNERS docs/CODEOWNERS; do
+            if [ -f "$f" ]; then
+              owner=$(grep -E '^\*[[:space:]]' "$f" | head -n1 | grep -oE '@[A-Za-z0-9_-]+' | head -n1 | sed 's/@//' || true)
+              [ -n "$owner" ] && break
+            fi
+          done
+          if [ -n "$owner" ]; then
+            gh pr edit "$pr_url" --add-reviewer "$owner" || echo "::warning::Could not request review from ${owner}."
+          else
+            echo "::warning::No CODEOWNERS owner found; skipping reviewer assignment."
+          fi
+
+          gh pr merge "$pr_url" --auto --squash \
+            || echo "::warning::Could not enable auto-merge; check that the repo allows auto-merge and main requires a review."

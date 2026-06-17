@@ -1,0 +1,7 @@
+{
+  "name": "fledge dev-version bump",
+  "description": "Daily fledge dev-version bump and tag: automatic for dev versions, codeowner-approved auto-merge PR for the first bump after a release.",
+  "iconName": "octicon tag",
+  "categories": ["R"],
+  "filePatterns": ["DESCRIPTION$", "NEWS\\.md$"]
+}
