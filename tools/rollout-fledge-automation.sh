@@ -29,6 +29,9 @@ ORG=poissonconsulting
 ENGINE_REF=v1                  # version the caller workflows pin
 BRANCH=f-fledge-automation     # branch created in each target repo
 
+# Repos to exclude even when fledge-managed (sandboxes and templates).
+EXCLUDE="dksandbox chktemplate poissontemplate"
+
 APPLY=false
 [ "${1:-}" = "--apply" ] && APPLY=true
 
@@ -68,6 +71,10 @@ added=0; skipped=0; nonpkg=0
 while IFS= read -r repo; do
   [ -n "$repo" ] || continue
   full="$ORG/$repo"
+
+  case " $EXCLUDE " in
+    *" $repo "*) echo "SKIP  $repo (excluded)"; skipped=$((skipped + 1)); continue ;;
+  esac
 
   # R package? DESCRIPTION must have a Package: field (excludes bookdown books,
   # websites and other repos that carry a DESCRIPTION but are not packages).
