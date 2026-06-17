@@ -76,15 +76,17 @@ For initial testing, temporarily change the caller `uses:` line to `@<test-branc
 
 ## Rollout
 
-Enumerate targets and add the two caller files to each repo via scripted PRs, alongside the same governance tooling that handles CODEOWNERS:
+`tools/rollout-fledge-automation.sh` adds the two caller workflows to every non-forked, non-archived repo with a root `DESCRIPTION` (an R package) and opens a draft PR for each.
+It is idempotent (skips repos already carrying `fledge-bump.yml` or an open rollout PR) and handles `main` and `master` default branches.
+Run it from a checkout of this repo after the `v1` tag exists:
 
 ```sh
-gh repo list poissonconsulting --no-archived --source --limit 300 \
-  --json name,primaryLanguage \
-  --jq '.[] | select(.primaryLanguage.name == "R") | .name'
+tools/rollout-fledge-automation.sh            # dry run: list target repos and actions
+tools/rollout-fledge-automation.sh --apply    # create branches + draft PRs
 ```
 
-For each repo, copy `workflow-templates/fledge-bump.yml` and `workflow-templates/fledge-tag-on-merge.yml` into `.github/workflows/` and open a PR.
+The PRs are opened as drafts; they are harmless until the App and org secrets are active.
+This pairs with the same governance process that handles CODEOWNERS.
 
 ## Testing checklist
 

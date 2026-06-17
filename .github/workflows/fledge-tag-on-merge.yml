@@ -30,10 +30,10 @@ jobs:
           app-id: ${{ secrets.FLEDGE_APP_ID }}
           private-key: ${{ secrets.FLEDGE_APP_PRIVATE_KEY }}
 
-      - name: Checkout main
+      - name: Checkout merged base branch
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
           fetch-tags: true
           token: ${{ steps.app-token.outputs.token }}

@@ -6,7 +6,7 @@ name: fledge-tag-on-merge
 on:
   pull_request:
     types: [closed]
-    branches: [main]
+    branches: [main, master]
 
 permissions:
   contents: write
