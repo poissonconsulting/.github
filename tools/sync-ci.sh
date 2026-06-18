@@ -56,6 +56,18 @@ gh_try() {
   rm -f "$err"; return 2
 }
 raw() { gh_try gh api -H "Accept: application/vnd.github.raw" "repos/$ORG/$1/contents/$2" || true; }
+# For files that must exist on a real package (DESCRIPTION, NEWS.md): retry through transient
+# empty/404 responses (GitHub returns spurious 404s for valid resources under load). Returns
+# empty only after the file is genuinely absent / persistently unreachable.
+raw_gate() {
+  local i out
+  for i in 1 2 3 4 5; do
+    out=$(gh api -H "Accept: application/vnd.github.raw" "repos/$ORG/$1/contents/$2" </dev/null 2>/dev/null || true)
+    [ -n "$out" ] && { printf '%s' "$out"; return 0; }
+    sleep 2
+  done
+  printf '%s' "$out"
+}
 is_cran() { curl -fsS -o /dev/null "https://cran.r-project.org/web/packages/$1/index.html" 2>/dev/null; }
 
 # Emit the packages to process. With a whitelist, iterate it directly (reliable for piloting).
@@ -178,9 +190,9 @@ while IFS= read -r repo <&3; do
   case "$repo" in *-book|*-docs) continue ;; esac
   sleep 1
 
-  desc=$(raw "$repo" DESCRIPTION)
+  desc=$(raw_gate "$repo" DESCRIPTION)
   printf '%s\n' "$desc" | grep -q '^Package:' || continue
-  printf '%s\n' "$(raw "$repo" NEWS.md)" | grep -qi 'fledge' || continue
+  printf '%s\n' "$(raw_gate "$repo" NEWS.md)" | grep -qi 'fledge' || continue
 
   # tier: registry override > CRAN > unimportant
   tier=$(awk -v p="$repo" '$1==p{print $2}' "$REGISTRY" | head -1)
