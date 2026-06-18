@@ -203,9 +203,12 @@ while IFS= read -r repo <&3; do
   vis=$(gh_try gh repo view "$ORG/$repo" --json visibility --jq '.visibility' || echo PUBLIC)
   private=false; [ "$vis" = PRIVATE ] && private=true
 
-  # jags from DESCRIPTION (rjags/runjags/jagsUI/R2jags, or a JAGS SystemRequirements)
+  # jags from DESCRIPTION: a JAGS R dependency or a JAGS SystemRequirements.
+  # Match the package names as whole words (not a bare "jags" substring, which also hit
+  # prose in the Description field and added the JAGS installs to packages that don't use it).
   jags=false
-  printf '%s\n' "$desc" | grep -qiE 'jags|rjags|runjags|jagsUI|R2jags' && jags=true
+  printf '%s\n' "$desc" | grep -qiE '\b(rjags|runjags|jagsUI|R2jags)\b' && jags=true
+  printf '%s\n' "$desc" | grep -qiE '^SystemRequirements:.*JAGS' && jags=true
 
   owner=$(printf '%s\n' "$(raw "$repo" .github/CODEOWNERS)" | grep -E '^\*[[:space:]]' | head -n1 | grep -oE '@[A-Za-z0-9_-]+' | head -n1 | sed 's/@//' || true)
   route=normal; [ "$owner" != joethorley ] && route="draft -> @${owner:-???}"
