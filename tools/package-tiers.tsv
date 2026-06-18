@@ -1,0 +1,28 @@
+# CI tier registry for poissonconsulting R packages, consumed by tools/sync-ci.sh.
+#
+# Format: one "<package> <tier>" per line. Tier is one of: cran | important | unimportant.
+# Lines starting with # are comments.
+#
+# Resolution per package (in tools/sync-ci.sh):
+#   1. if listed here              -> that tier
+#   2. else if detected on CRAN    -> cran
+#   3. else                        -> unimportant   (default)
+#
+# So you normally only list packages to PROMOTE to "important" (non-CRAN packages that still
+# warrant a fuller matrix), or to force a tier. CRAN packages are auto-detected and additionally
+# get the check-no-suggests workflow. private and jags are auto-detected too (never listed here).
+#
+# === FIRST PASS — review and adjust ===
+# Core Bayesian engines and analysis infrastructure (fuller matrix, not necessarily on CRAN):
+embr important
+smbr important
+smbr2 important
+jmbr important
+tmbr important
+mcmcderive important
+subfoldr2 important
+poispkgs important
+poisdata important
+poisutils important
+usepois important
+poisreport important
