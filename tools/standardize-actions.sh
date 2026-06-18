@@ -163,7 +163,7 @@ MSG
     else
       iss=$(gh issue create --repo "$ORG/$repo" \
         --title "Standardize GitHub Actions to the core Poisson set" \
-        --body "$body" --jq '.number' 2>/dev/null || true)
+        --body "$body" 2>/dev/null | grep -oE '[0-9]+$' || true)
       pr=$(gh pr create --repo "$ORG/$repo" --draft --base "$default" --head "$BRANCH" \
         --title "Standardize GitHub Actions to the core set" \
         ${owner:+--assignee "$owner"} \
