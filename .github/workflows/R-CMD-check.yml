@@ -1,0 +1,97 @@
+# Reusable R-CMD-check, parameterized by package tier.
+# Called by a thin per-package caller (see tools/sync-ci.sh). Callers must use `secrets: inherit`.
+#   tier=cran        -> macOS+Windows+Ubuntu x {devel,release,oldrel-1}, error_on=warning
+#   tier=important   -> macOS+Windows+Ubuntu-release + Ubuntu-oldrel-1,  error_on=warning
+#   tier=unimportant -> Ubuntu-release only,                              error_on=error  (default)
+# jags=true adds the macOS/Windows JAGS installs (Linux gets JAGS via setup-r-dependencies sysreqs).
+# private=true runs with PRIVATE_ACTIONS_PAT so private dependencies resolve.
+
+name: R-CMD-check
+
+on:
+  workflow_call:
+    inputs:
+      tier:
+        type: string
+        default: unimportant
+      jags:
+        type: boolean
+        default: false
+      private:
+        type: boolean
+        default: false
+
+permissions: read-all
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      config: ${{ steps.set.outputs.config }}
+      error_on: ${{ steps.set.outputs.error_on }}
+    steps:
+      - id: set
+        run: |
+          case "${{ inputs.tier }}" in
+            cran)
+              cfg='[{"os":"macos-latest","r":"release"},{"os":"windows-latest","r":"release"},{"os":"ubuntu-latest","r":"devel","http-user-agent":"release"},{"os":"ubuntu-latest","r":"release"},{"os":"ubuntu-latest","r":"oldrel-1"}]'
+              eon=warning ;;
+            important)
+              cfg='[{"os":"macos-latest","r":"release"},{"os":"windows-latest","r":"release"},{"os":"ubuntu-latest","r":"release"},{"os":"ubuntu-latest","r":"oldrel-1"}]'
+              eon=warning ;;
+            *)
+              cfg='[{"os":"ubuntu-latest","r":"release"}]'
+              eon=error ;;
+          esac
+          echo "config=${cfg}" >> "$GITHUB_OUTPUT"
+          echo "error_on=${eon}" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: matrix
+    runs-on: ${{ matrix.config.os }}
+    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON(needs.matrix.outputs.config) }}
+    env:
+      GITHUB_PAT: ${{ inputs.private && secrets.PRIVATE_ACTIONS_PAT || secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Install JAGS (macOS)
+        if: ${{ inputs.jags && runner.os == 'macOS' }}
+        run: |
+          curl -o wjags.pkg -L0 -k --url https://downloads.sourceforge.net/project/mcmc-jags/JAGS/4.x/Mac%20OS%20X/JAGS-4.3.2.pkg
+          sudo installer -pkg wjags.pkg -target /
+          rm wjags.pkg
+
+      - name: Download JAGS (Windows)
+        if: ${{ inputs.jags && runner.os == 'Windows' }}
+        run: (New-Object System.Net.WebClient).DownloadFile('https://github.com/poissonconsulting/jags-win/raw/main/JAGS-4.3.1.exe', 'C:\JAGS-4.3.1.exe')
+        shell: powershell
+
+      - name: Install JAGS (Windows)
+        if: ${{ inputs.jags && runner.os == 'Windows' }}
+        run: C:\JAGS-4.3.1.exe /S
+        shell: cmd
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          upload-snapshots: true
+          error-on: ${{ format('"{0}"', needs.matrix.outputs.error_on) }}
+          build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
