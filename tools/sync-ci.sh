@@ -68,10 +68,10 @@ raw() { gh_try gh api -H "Accept: application/vnd.github.raw" "repos/$ORG/$1/con
 # empty only after the file is genuinely absent / persistently unreachable.
 raw_gate() {
   local i out
-  for i in 1 2 3 4 5; do
+  for i in 1 2 3 4 5 6 7 8; do
     out=$(gh api -H "Accept: application/vnd.github.raw" "repos/$ORG/$1/contents/$2" </dev/null 2>/dev/null || true)
     [ -n "$out" ] && { printf '%s' "$out"; return 0; }
-    sleep 2
+    sleep 3
   done
   printf '%s' "$out"
 }
@@ -200,9 +200,18 @@ while IFS= read -r repo <&3; do
   case "$repo" in *-book|*-docs) continue ;; esac
   sleep 1
 
+  # Package/fledge gate. The contents API returns spurious empties under load, so a transient
+  # miss must never silently drop a repo. With an explicit name list the operator has already
+  # vetted the packages: trust the list, warn (don't drop) if DESCRIPTION can't be confirmed,
+  # and skip the NEWS fledge requirement. Only the full org sweep applies the strict gate.
   desc=$(raw_gate "$repo" DESCRIPTION)
-  printf '%s\n' "$desc" | grep -q '^Package:' || continue
-  printf '%s\n' "$(raw_gate "$repo" NEWS.md)" | grep -qi 'fledge' || continue
+  if [ -n "$ONLY" ]; then
+    printf '%s\n' "$desc" | grep -q '^Package:' \
+      || echo "WARN  $repo: DESCRIPTION not confirmed after retries (proceeding; jags may default to false)"
+  else
+    printf '%s\n' "$desc" | grep -q '^Package:' || continue
+    printf '%s\n' "$(raw_gate "$repo" NEWS.md)" | grep -qi 'fledge' || continue
+  fi
 
   # tier: registry override > CRAN > unimportant
   oncran=false; is_cran "$repo" && oncran=true
