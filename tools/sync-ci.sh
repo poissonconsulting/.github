@@ -14,7 +14,7 @@
 #   tier      registry override > detected-on-CRAN > unimportant (default)
 #   private   auto-detected from repo visibility   -> drives GITHUB_PAT (PRIVATE_ACTIONS_PAT)
 #   jags      auto-detected from DESCRIPTION / workflows
-#   cran      tier == cran                          -> adds the check-no-suggests caller + vendored rhub.yaml
+#   cran      detected on CRAN (independent of tier) -> adds check-no-suggests caller + vendored rhub.yaml
 #
 # Usage:
 #   tools/sync-ci.sh                      # dry run: classify every package + planned action
@@ -205,9 +205,13 @@ while IFS= read -r repo <&3; do
   printf '%s\n' "$(raw_gate "$repo" NEWS.md)" | grep -qi 'fledge' || continue
 
   # tier: registry override > CRAN > unimportant
+  oncran=false; is_cran "$repo" && oncran=true
   tier=$(awk -v p="$repo" '$1==p{print $2}' "$REGISTRY" | head -1)
-  if [ -z "$tier" ]; then if is_cran "$repo"; then tier=cran; else tier=unimportant; fi; fi
-  cran=false; [ "$tier" = cran ] && cran=true
+  if [ -z "$tier" ]; then if [ "$oncran" = true ]; then tier=cran; else tier=unimportant; fi; fi
+  # The CRAN-only checks (check-no-suggests + vendored rhub) key off actual CRAN
+  # membership, independent of tier, so a registry-pinned tier (e.g. important) on a
+  # CRAN package still gets them.
+  cran=false; { [ "$tier" = cran ] || [ "$oncran" = true ]; } && cran=true
 
   # private from visibility
   vis=$(gh_try gh repo view "$ORG/$repo" --json visibility --jq '.visibility' || echo PUBLIC)
@@ -227,7 +231,7 @@ while IFS= read -r repo <&3; do
   [ "$private" = true ] && priv_n=$((priv_n+1)); [ "$jags" = true ] && jags_n=$((jags_n+1)); act=$((act+1))
 
   if [ "$MODE" != apply ]; then
-    printf 'TODO  %-22s tier=%-11s private=%-5s jags=%-5s route=%s\n' "$repo" "$tier" "$private" "$jags" "$route"
+    printf 'TODO  %-22s tier=%-11s cran=%-5s private=%-5s jags=%-5s route=%s\n' "$repo" "$tier" "$cran" "$private" "$jags" "$route"
     continue
   fi
 
