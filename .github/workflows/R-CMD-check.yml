@@ -4,6 +4,8 @@
 #   tier=important   -> macOS+Windows+Ubuntu-release + Ubuntu-oldrel-1,  error_on=warning
 #   tier=unimportant -> Ubuntu-release only,                              error_on=error  (default)
 # jags=true adds the macOS/Windows JAGS installs (Linux gets JAGS via setup-r-dependencies sysreqs).
+# tex=true installs TinyTeX so packages that build PDFs (PDF vignettes, or report engines like
+# poisreport::knit_report) can compile LaTeX during checks.
 # private=true runs with PRIVATE_ACTIONS_PAT so private dependencies resolve.
 
 name: R-CMD-check
@@ -15,6 +17,9 @@ on:
         type: string
         default: unimportant
       jags:
+        type: boolean
+        default: false
+      tex:
         type: boolean
         default: false
       private:
@@ -61,6 +66,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-tinytex@v2
+        if: ${{ inputs.tex }}
 
       - name: Install JAGS (macOS)
         if: ${{ inputs.jags && runner.os == 'macOS' }}

@@ -14,6 +14,7 @@
 #   tier      registry override > detected-on-CRAN > unimportant (default)
 #   private   auto-detected from repo visibility   -> drives GITHUB_PAT (PRIVATE_ACTIONS_PAT)
 #   jags      auto-detected from DESCRIPTION / workflows
+#   tex       auto-detected from repo contents (PDF vignettes / PDF-rendering R code) -> installs TinyTeX
 #   cran      detected on CRAN (independent of tier) -> adds check-no-suggests caller + vendored rhub.yaml
 #
 # Usage:
@@ -77,6 +78,21 @@ raw_gate() {
 }
 is_cran() { curl -fsS -o /dev/null "https://cran.r-project.org/web/packages/$1/index.html" 2>/dev/null; }
 
+# Detect whether a package builds PDFs (and so needs TinyTeX in CI): any Sweave/knitr LaTeX
+# vignette (.Rnw), or an .Rmd vignette / R source file that targets a LaTeX output. Reads the
+# recursive tree once, then greps only the candidate files, returning at the first hit.
+detect_tex() {
+  local repo="$1" ref="$2" paths f
+  paths=$(gh_try gh api "repos/$ORG/$repo/git/trees/$ref?recursive=1" --jq '.tree[].path' </dev/null 2>/dev/null || true)
+  printf '%s\n' "$paths" | grep -qiE '\.Rnw$' && { echo true; return; }
+  for f in $(printf '%s\n' "$paths" | grep -iE '^(vignettes|inst)/.*\.Rmd$|^R/.*\.[Rr]$' | head -200); do
+    printf '%s\n' "$(raw "$repo" "$f")" \
+      | grep -qiE 'pdf_document|latex_engine|beamer_presentation|tufte_handout|pdf_book|pdf_vignette' \
+      && { echo true; return; }
+  done
+  echo false
+}
+
 # Emit the packages to process. With a whitelist, iterate it directly (reliable for piloting).
 # Otherwise fetch the org repo list, retrying until it looks complete (>=300) so a partial
 # response can't silently drop packages.
@@ -111,6 +127,7 @@ jobs:
     with:
       tier: $tier
       jags: $jags
+      tex: $tex
       private: $private
     secrets: inherit
 YAML
@@ -127,6 +144,7 @@ jobs:
   test-coverage:
     uses: $ORG/.github/.github/workflows/test-coverage.yml@$eng
     with:
+      tex: $tex
       private: $private
     secrets: inherit
 YAML
@@ -192,7 +210,7 @@ fi
 [ "$MODE" = apply ] || echo "DRY RUN (--apply to act, --close-old to retire the old rollout)"
 echo
 
-cran_n=0 imp_n=0 unimp_n=0 priv_n=0 jags_n=0 act=0 failed=""
+cran_n=0 imp_n=0 unimp_n=0 priv_n=0 jags_n=0 tex_n=0 act=0 failed=""
 
 while IFS= read -r repo <&3; do
   [ -n "$repo" ] || continue
@@ -233,14 +251,18 @@ while IFS= read -r repo <&3; do
   printf '%s\n' "$desc" | grep -qiE '\b(rjags|runjags|jagsUI|R2jags)\b' && jags=true
   printf '%s\n' "$desc" | grep -qiE '^SystemRequirements:.*JAGS' && jags=true
 
+  # tex auto-detected from repo contents (PDF vignettes or PDF-rendering R code).
+  default=$(gh_try gh api "repos/$ORG/$repo" --jq '.default_branch' </dev/null || echo main)
+  tex=$(detect_tex "$repo" "$default")
+
   owner=$(printf '%s\n' "$(raw "$repo" .github/CODEOWNERS)" | grep -E '^\*[[:space:]]' | head -n1 | grep -oE '@[A-Za-z0-9_-]+' | head -n1 | sed 's/@//' || true)
   route=normal; [ "$owner" != joethorley ] && route="review -> @${owner:-???}"
 
   case "$tier" in cran) cran_n=$((cran_n+1));; important) imp_n=$((imp_n+1));; *) unimp_n=$((unimp_n+1));; esac
-  [ "$private" = true ] && priv_n=$((priv_n+1)); [ "$jags" = true ] && jags_n=$((jags_n+1)); act=$((act+1))
+  [ "$private" = true ] && priv_n=$((priv_n+1)); [ "$jags" = true ] && jags_n=$((jags_n+1)); [ "$tex" = true ] && tex_n=$((tex_n+1)); act=$((act+1))
 
   if [ "$MODE" != apply ]; then
-    printf 'TODO  %-22s tier=%-11s cran=%-5s private=%-5s jags=%-5s route=%s\n' "$repo" "$tier" "$cran" "$private" "$jags" "$route"
+    printf 'TODO  %-22s tier=%-11s cran=%-5s private=%-5s jags=%-5s tex=%-5s route=%s\n' "$repo" "$tier" "$cran" "$private" "$jags" "$tex" "$route"
     continue
   fi
 
@@ -248,7 +270,7 @@ while IFS= read -r repo <&3; do
     echo "SKIP  $repo (open $BRANCH PR exists)"; continue
   fi
 
-  echo "APPLY $repo (tier=$tier private=$private jags=$jags route=$route)"
+  echo "APPLY $repo (tier=$tier private=$private jags=$jags tex=$tex route=$route)"
   work=$(mktemp -d)
   if (
     set -e
@@ -269,7 +291,7 @@ keeping the fledge callers.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
     git push -q -u --force origin "$BRANCH"
-    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests'); fledge callers unchanged."
+    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests'); fledge callers unchanged."
     default=$(gh api "repos/$ORG/$repo" --jq '.default_branch')
     if [ "$owner" = joethorley ]; then
       gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
@@ -287,6 +309,6 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 done 3< <(repo_source)
 
 echo
-echo "packages: $act | cran: $cran_n | important: $imp_n | unimportant: $unimp_n | private: $priv_n | jags: $jags_n"
+echo "packages: $act | cran: $cran_n | important: $imp_n | unimportant: $unimp_n | private: $priv_n | jags: $jags_n | tex: $tex_n"
 [ -n "$failed" ] && echo "FAILED (re-run):$failed"
 [ "$MODE" = apply ] || echo "Dry run. Re-run with --apply (optionally package names) to act."
