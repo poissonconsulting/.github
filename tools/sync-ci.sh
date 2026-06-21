@@ -4,14 +4,17 @@
 #
 # Per fledge-managed package it renders thin caller workflows that invoke the reusable
 # workflows in poissonconsulting/.github (R-CMD-check, test-coverage, pkgdown, and, for CRAN
-# packages, check-no-suggests), preserving the fledge callers, and opens one routed PR
-# (normal PR for joethorley-owned repos; issue + draft PR assigned to the owner otherwise).
+# packages, check-no-suggests). CRAN packages also get the vendored R-hub workflow (rhub.yaml,
+# dispatch-triggered and r-hub-owned, so distributed as a template not a caller). The fledge
+# callers and the bespoke paper.yaml / slack-check-package.yaml workflows are preserved; all
+# other pre-existing workflows are replaced. Opens one routed PR (normal PR for joethorley-owned
+# repos; issue + ready-for-review PR assigned to the owner with review requested otherwise).
 #
 # Classification per package:
 #   tier      registry override > detected-on-CRAN > unimportant (default)
 #   private   auto-detected from repo visibility   -> drives GITHUB_PAT (PRIVATE_ACTIONS_PAT)
 #   jags      auto-detected from DESCRIPTION / workflows
-#   cran      tier == cran                          -> adds the check-no-suggests caller
+#   cran      tier == cran                          -> adds the check-no-suggests caller + vendored rhub.yaml
 #
 # Usage:
 #   tools/sync-ci.sh                      # dry run: classify every package + planned action
@@ -30,8 +33,12 @@ OLD_BRANCH=f-standardize-actions
 ENGINE_REF="${ENGINE_REF:-v1}"
 EXCLUDE="dksandbox chktemplate poissontemplate"
 KEEP_FLEDGE="fledge-bump.yml fledge-tag-on-merge.yml"
+# Bespoke per-package workflows preserved across standardization (not replaced by a
+# reusable caller): JOSS paper build and the Slack package-check notifier.
+KEEP_PRESERVE="paper.yaml slack-check-package.yaml"
 root=$(git rev-parse --show-toplevel)
 REGISTRY="$root/tools/package-tiers.tsv"
+RHUB_TPL="$root/workflow-templates/rhub.yaml"
 
 MODE=dry
 case "${1:-}" in
@@ -159,6 +166,9 @@ jobs:
       private: $private
     secrets: inherit
 YAML
+    # R-hub is dispatch-triggered (rhub::rhub_check()) and r-hub-owned, so it is vendored
+    # from the canonical template rather than invoked as a reusable caller. CRAN tier only.
+    cp "$RHUB_TPL" "$wf/rhub.yaml"
   fi
 }
 
@@ -211,7 +221,7 @@ while IFS= read -r repo <&3; do
   printf '%s\n' "$desc" | grep -qiE '^SystemRequirements:.*JAGS' && jags=true
 
   owner=$(printf '%s\n' "$(raw "$repo" .github/CODEOWNERS)" | grep -E '^\*[[:space:]]' | head -n1 | grep -oE '@[A-Za-z0-9_-]+' | head -n1 | sed 's/@//' || true)
-  route=normal; [ "$owner" != joethorley ] && route="draft -> @${owner:-???}"
+  route=normal; [ "$owner" != joethorley ] && route="review -> @${owner:-???}"
 
   case "$tier" in cran) cran_n=$((cran_n+1));; important) imp_n=$((imp_n+1));; *) unimp_n=$((unimp_n+1));; esac
   [ "$private" = true ] && priv_n=$((priv_n+1)); [ "$jags" = true ] && jags_n=$((jags_n+1)); act=$((act+1))
@@ -233,10 +243,10 @@ while IFS= read -r repo <&3; do
     cd "$work/$repo"
     git checkout -b "$BRANCH" -q
     kp="$work/.keep"; mkdir -p "$kp"
-    for k in $KEEP_FLEDGE; do [ -f ".github/workflows/$k" ] && cp ".github/workflows/$k" "$kp/"; done
+    for k in $KEEP_FLEDGE $KEEP_PRESERVE; do [ -f ".github/workflows/$k" ] && cp ".github/workflows/$k" "$kp/"; done
     rm -rf .github/workflows && mkdir -p .github/workflows
     render_callers .github/workflows
-    cp "$kp"/*.yml .github/workflows/ 2>/dev/null || true
+    cp "$kp"/* .github/workflows/ 2>/dev/null || true
     git add -A
     git commit -q -m "Standardize CI via reusable workflows (tier: $tier)
 
@@ -253,12 +263,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
         --title "Standardize CI (tier: $tier)" --body "$body" >/dev/null
     else
       iss=$(gh issue create --repo "$ORG/$repo" --title "Standardize CI onto reusable workflows" --body "$body" 2>/dev/null | grep -oE '[0-9]+$' || true)
-      pr=$(gh pr create --repo "$ORG/$repo" --draft --base "$default" --head "$BRANCH" \
-        --title "Standardize CI (tier: $tier)" ${owner:+--assignee "$owner"} \
+      gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
+        --title "Standardize CI (tier: $tier)" ${owner:+--assignee "$owner" --reviewer "$owner"} \
         --body "${iss:+Closes #$iss.
 
-}$body")
-      [ -n "$owner" ] && gh pr edit "$pr" --repo "$ORG/$repo" --add-reviewer "$owner" >/dev/null 2>&1 || true
+}$body" >/dev/null
     fi
   ); then echo "  done $repo"; else echo "FAIL  $repo (re-run to retry)"; failed="$failed $repo"; fi
   rm -rf "$work"
