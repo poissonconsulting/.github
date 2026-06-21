@@ -1,0 +1,7 @@
+{
+  "name": "R-hub cross-platform check (CRAN)",
+  "description": "Dispatch-triggered R-hub v2 check across CRAN-relevant platforms. Run via rhub::rhub_check(). Distributed to CRAN-tier packages by tools/sync-ci.sh.",
+  "iconName": "octicon server",
+  "categories": ["R"],
+  "filePatterns": ["DESCRIPTION$"]
+}
