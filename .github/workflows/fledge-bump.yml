@@ -1,7 +1,8 @@
 # Back-compat shim: forwards the ~78 fledge-bump callers still pinned to the
-# .yml path to the canonical fledge-bump.yaml reusable workflow. permissions:
-# write-all does not escalate -- the calling package workflow's own permissions
-# cap the effective token. Delete once every caller references fledge-bump.yaml@v1.
+# .yml path to the canonical fledge-bump.yaml reusable workflow. Permissions
+# must match the caller's minimal grant -- a reusable that requests more than
+# the caller grants is rejected at startup. Delete once every caller references
+# fledge-bump.yaml@v1.
 
 name: fledge-bump
 
@@ -17,7 +18,9 @@ on:
         type: string
         default: fledge-bump
 
-permissions: write-all
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   forward:

@@ -1,7 +1,8 @@
 # Back-compat shim: forwards callers still pinned to the .yml path to the
-# canonical check-no-suggests.yaml reusable workflow. permissions: write-all
-# does not escalate -- the calling package workflow's own permissions cap the
-# effective token. Delete once every caller references check-no-suggests.yaml@v1.
+# canonical check-no-suggests.yaml reusable workflow. Permissions must match the
+# caller's minimal grant -- a reusable that requests more than the caller
+# grants is rejected at startup. Delete once every caller references
+# check-no-suggests.yaml@v1.
 
 name: check-no-suggests
 
@@ -12,7 +13,8 @@ on:
         type: boolean
         default: false
 
-permissions: write-all
+permissions:
+  contents: read
 
 jobs:
   forward:
