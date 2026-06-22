@@ -5,10 +5,11 @@
 # Targets every non-forked, non-archived repo that contains a root DESCRIPTION file
 # (i.e. an R package). For each, it adds, on a branch, the two caller workflows copied
 # from this repo's workflow-templates and opens a draft pull request:
-#   .github/workflows/fledge-bump.yml
-#   .github/workflows/fledge-tag-on-merge.yml
+#   .github/workflows/fledge-bump.yaml
+#   .github/workflows/fledge-tag-on-merge.yaml
 #
-# Idempotent: skips repos that already have fledge-bump.yml or an open rollout PR.
+# Idempotent: skips repos that already have a fledge-bump caller (either
+# extension) or an open rollout PR.
 # Uses the GitHub API only (no per-repo clone). Run from a checkout of
 # poissonconsulting/.github.
 #
@@ -36,8 +37,8 @@ APPLY=false
 [ "${1:-}" = "--apply" ] && APPLY=true
 
 repo_root=$(git rev-parse --show-toplevel)
-bump_tpl="$repo_root/workflow-templates/fledge-bump.yml"
-tag_tpl="$repo_root/workflow-templates/fledge-tag-on-merge.yml"
+bump_tpl="$repo_root/workflow-templates/fledge-bump.yaml"
+tag_tpl="$repo_root/workflow-templates/fledge-tag-on-merge.yaml"
 for f in "$bump_tpl" "$tag_tpl"; do
   [ -f "$f" ] || { echo "Missing template: $f" >&2; exit 1; }
 done
@@ -88,9 +89,10 @@ while IFS= read -r repo; do
   if ! printf '%s\n' "$news" | grep -qi 'fledge'; then
     echo "SKIP  $repo (not fledge-managed)"; skipped=$((skipped + 1)); continue
   fi
-  # Already rolled out?
-  if gh api "repos/$full/contents/.github/workflows/fledge-bump.yml" --jq '.path' >/dev/null 2>&1; then
-    echo "SKIP  $repo (fledge-bump.yml already present)"; skipped=$((skipped + 1)); continue
+  # Already rolled out? (either extension during the .yml -> .yaml migration)
+  if gh api "repos/$full/contents/.github/workflows/fledge-bump.yaml" --jq '.path' >/dev/null 2>&1 \
+     || gh api "repos/$full/contents/.github/workflows/fledge-bump.yml" --jq '.path' >/dev/null 2>&1; then
+    echo "SKIP  $repo (fledge-bump caller already present)"; skipped=$((skipped + 1)); continue
   fi
   # Open rollout PR already exists?
   if [ -n "$(gh pr list --repo "$full" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')" ]; then
@@ -105,8 +107,8 @@ while IFS= read -r repo; do
   base_sha=$(gh api "repos/$full/git/ref/heads/$default" --jq '.object.sha')
   gh api -X POST "repos/$full/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$base_sha" >/dev/null 2>&1 || true
 
-  put_file "$full" ".github/workflows/fledge-bump.yml"        "$bump_tpl" "Add fledge-bump workflow"
-  put_file "$full" ".github/workflows/fledge-tag-on-merge.yml" "$tag_tpl"  "Add fledge-tag-on-merge workflow"
+  put_file "$full" ".github/workflows/fledge-bump.yaml"        "$bump_tpl" "Add fledge-bump workflow"
+  put_file "$full" ".github/workflows/fledge-tag-on-merge.yaml" "$tag_tpl"  "Add fledge-tag-on-merge workflow"
 
   gh pr create --repo "$full" --draft --base "$default" --head "$BRANCH" \
     --title "Add fledge dev-version bump automation" \

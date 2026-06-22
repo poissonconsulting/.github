@@ -33,7 +33,8 @@ BRANCH=f-ci
 OLD_BRANCH=f-standardize-actions
 ENGINE_REF="${ENGINE_REF:-v1}"
 EXCLUDE="dksandbox chktemplate poissontemplate"
-KEEP_FLEDGE="fledge-bump.yml fledge-tag-on-merge.yml"
+# Preserve fledge callers under either extension during the .yml -> .yaml migration.
+KEEP_FLEDGE="fledge-bump.yaml fledge-tag-on-merge.yaml fledge-bump.yml fledge-tag-on-merge.yml"
 # Bespoke per-package workflows preserved across standardization (not replaced by a
 # reusable caller): JOSS paper build and the Slack package-check notifier.
 KEEP_PRESERVE="paper.yaml slack-check-package.yaml"
@@ -112,7 +113,7 @@ repo_source() {
 # Render the caller workflows into $1=.github/workflows dir using tier/jags/private/cran in scope.
 render_callers() {
   local wf="$1" eng="$ENGINE_REF"
-  cat > "$wf/R-CMD-check.yml" <<YAML
+  cat > "$wf/R-CMD-check.yaml" <<YAML
 name: R-CMD-check
 on:
   push:
@@ -123,7 +124,7 @@ permissions:
   contents: read
 jobs:
   R-CMD-check:
-    uses: $ORG/.github/.github/workflows/R-CMD-check.yml@$eng
+    uses: $ORG/.github/.github/workflows/R-CMD-check.yaml@$eng
     with:
       tier: $tier
       jags: $jags
@@ -131,7 +132,7 @@ jobs:
       private: $private
     secrets: inherit
 YAML
-  cat > "$wf/test-coverage.yml" <<YAML
+  cat > "$wf/test-coverage.yaml" <<YAML
 name: test-coverage
 on:
   push:
@@ -142,13 +143,13 @@ permissions:
   contents: read
 jobs:
   test-coverage:
-    uses: $ORG/.github/.github/workflows/test-coverage.yml@$eng
+    uses: $ORG/.github/.github/workflows/test-coverage.yaml@$eng
     with:
       tex: $tex
       private: $private
     secrets: inherit
 YAML
-  cat > "$wf/pkgdown.yml" <<YAML
+  cat > "$wf/pkgdown.yaml" <<YAML
 name: pkgdown
 on:
   push:
@@ -162,13 +163,13 @@ permissions:
   contents: write
 jobs:
   pkgdown:
-    uses: $ORG/.github/.github/workflows/pkgdown.yml@$eng
+    uses: $ORG/.github/.github/workflows/pkgdown.yaml@$eng
     with:
       private: $private
     secrets: inherit
 YAML
   if [ "$cran" = true ]; then
-    cat > "$wf/check-no-suggests.yml" <<YAML
+    cat > "$wf/check-no-suggests.yaml" <<YAML
 name: check-no-suggests
 on:
   push:
@@ -179,7 +180,7 @@ permissions:
   contents: read
 jobs:
   check-no-suggests:
-    uses: $ORG/.github/.github/workflows/check-no-suggests.yml@$eng
+    uses: $ORG/.github/.github/workflows/check-no-suggests.yaml@$eng
     with:
       private: $private
     secrets: inherit

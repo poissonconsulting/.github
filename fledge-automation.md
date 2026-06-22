@@ -22,12 +22,12 @@ If no new commits have landed, the open PR is left untouched so its approval and
 
 | File | Repo | Role |
 | --- | --- | --- |
-| `.github/workflows/fledge-bump.yml` | `poissonconsulting/.github` | Reusable engine (bump + classify + PR). |
-| `.github/workflows/fledge-tag-on-merge.yml` | `poissonconsulting/.github` | Reusable engine (tag on merge). |
-| `workflow-templates/fledge-bump.yml` | `poissonconsulting/.github` | Per-package caller (schedule + dispatch). |
-| `workflow-templates/fledge-tag-on-merge.yml` | `poissonconsulting/.github` | Per-package caller (PR closed). |
-| `.github/workflows/fledge-bump.yml` | each package | Thin caller (copied from the template). |
-| `.github/workflows/fledge-tag-on-merge.yml` | each package | Thin caller (copied from the template). |
+| `.github/workflows/fledge-bump.yaml` | `poissonconsulting/.github` | Reusable engine (bump + classify + PR). A `.yml` forwarding shim aliases the old path during migration. |
+| `.github/workflows/fledge-tag-on-merge.yaml` | `poissonconsulting/.github` | Reusable engine (tag on merge). A `.yml` forwarding shim aliases the old path during migration. |
+| `workflow-templates/fledge-bump.yaml` | `poissonconsulting/.github` | Per-package caller (schedule + dispatch). |
+| `workflow-templates/fledge-tag-on-merge.yaml` | `poissonconsulting/.github` | Per-package caller (PR closed). |
+| `.github/workflows/fledge-bump.yaml` | each package | Thin caller (copied from the template). |
+| `.github/workflows/fledge-tag-on-merge.yaml` | each package | Thin caller (copied from the template). |
 
 ## One-time setup (org admin)
 
