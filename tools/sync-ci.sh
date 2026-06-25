@@ -11,11 +11,11 @@
 # repos; issue + ready-for-review PR assigned to the owner with review requested otherwise).
 #
 # Classification per package:
-#   tier      registry override > detected-on-CRAN > unimportant (default)
+#   tier      registry override > active-on-CRAN > unimportant (default)
 #   private   auto-detected from repo visibility   -> drives GITHUB_PAT (PRIVATE_ACTIONS_PAT)
 #   jags      auto-detected from DESCRIPTION / workflows
 #   tex       auto-detected from repo contents (PDF vignettes / PDF-rendering R code) -> installs TinyTeX
-#   cran      detected on CRAN (independent of tier) -> adds check-no-suggests caller + vendored rhub.yaml
+#   cran      active on CRAN (independent of tier; archived packages excluded) -> adds check-no-suggests caller + vendored rhub.yaml
 #
 # Usage:
 #   tools/sync-ci.sh                      # dry run: classify every package + planned action
@@ -77,7 +77,29 @@ raw_gate() {
   done
   printf '%s' "$out"
 }
-is_cran() { curl -fsS -o /dev/null "https://cran.r-project.org/web/packages/$1/index.html" 2>/dev/null; }
+# Active-on-CRAN detection. The src/contrib/PACKAGES index lists only currently published
+# packages, so it is the authoritative source for "active on CRAN": archived packages (e.g.
+# rpdo, removed 2024-07-10) are absent. The per-package web/packages/<pkg>/index.html page must
+# NOT be used, because it persists for archived packages (showing a "removed from the CRAN
+# repository" notice) and so returns 200 for them too, misclassifying them as CRAN. The index is
+# ~22k packages; fetch it once, cache, and look packages up by exact name. Retry transient
+# failures and abort rather than silently downgrade every CRAN package to unimportant.
+CRAN_LIST=""
+load_cran_list() {
+  [ -n "$CRAN_LIST" ] && return
+  local i out
+  for i in 1 2 3 4 5 6; do
+    out=$(curl -fsS "https://cran.r-project.org/src/contrib/PACKAGES" 2>/dev/null \
+            | awk '/^Package:/{print $2}' | sort -u || true)
+    if [ "$(printf '%s\n' "$out" | grep -c .)" -ge 10000 ]; then
+      CRAN_LIST=$(mktemp); printf '%s\n' "$out" > "$CRAN_LIST"; return
+    fi
+    sleep 3
+  done
+  echo "ERROR cannot fetch CRAN PACKAGES index (got $(printf '%s\n' "$out" | grep -c .) names); aborting to avoid misclassifying CRAN packages" >&2
+  exit 1
+}
+is_cran() { load_cran_list; grep -qxF -- "$1" "$CRAN_LIST"; }
 
 # Detect whether a package builds PDFs (and so needs TinyTeX in CI): any Sweave/knitr LaTeX
 # vignette (.Rnw), or an .Rmd vignette / R source file that targets a LaTeX output. Reads the
