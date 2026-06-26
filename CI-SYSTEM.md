@@ -68,7 +68,8 @@ ENGINE_REF=branch tools/sync-ci.sh --apply pkgA   # pin callers to a branch inst
 ```
 
 Routing follows the CODEOWNER: a normal PR when Joe owns the repo, otherwise an issue plus a PR assigned to the owner with review requested.
-The tool is dry-run by default, idempotent (skips repos with an open `f-ci` PR), throttled, and isolates per-repo failures so one transient does not abort the batch.
+The tool is dry-run by default, throttled, and isolates per-repo failures so one transient does not abort the batch.
+On `--apply`, if the CI system already has an open PR for a repo (its `f-ci` branch), it closes that PR (and its linked tracking issue) and opens a fresh one, so a re-run always reflects the current classification.
 
 Note: a very high burst of API calls can trip GitHub's secondary rate limiter, which makes a dry run under-report (packages drop based on the throttle window).
 It clears within minutes; re-run and it converges.
@@ -89,7 +90,7 @@ When you keep a candidate important, commit the one-line `tools/package-tiers.ts
 
 - **Promote a package to `important`**: add `<pkg> important` to `tools/package-tiers.tsv`, then `tools/sync-ci.sh --apply <pkg>`.
 - **Roll out a reusable-workflow change**: merge it into `main`, move the `v1` tag forward (`git tag -f v1 && git push -f origin v1`), and the change propagates to every package on its next run.
-- **Re-sync a package** after a classification change (e.g. CRAN archival): `tools/sync-ci.sh --apply <pkg>`; if an open `f-ci` PR already exists it is skipped, so close the stale PR first to regenerate it.
+- **Re-sync a package** after a classification change (e.g. CRAN archival): `tools/sync-ci.sh --apply <pkg>`; any open `f-ci` PR is closed and replaced automatically.
 - **Add CI to a new package**: `tools/sync-ci.sh --apply <pkg>`; the package must have a `DESCRIPTION` and (for the full sweep) a fledge-managed `NEWS.md`.
 
 The one-time go-live sequence and rollout status are recorded in `GO-LIVE.md` and `CI-ROLLOUT-STATUS.md`; fledge version-bump automation is documented in `fledge-automation.md`.

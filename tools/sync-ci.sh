@@ -343,8 +343,22 @@ while IFS= read -r repo <&3; do
     continue
   fi
 
-  if [ -n "$(gh pr list --repo "$ORG/$repo" --head "$BRANCH" --state open --json number --jq '.[0].number // empty' </dev/null)" ]; then
-    echo "SKIP  $repo (open $BRANCH PR exists)"; continue
+  # If the CI system already has an open PR for this repo (identified by the f-ci head branch, so
+  # only ever its own PRs, never hand-authored ones), close it and reopen a fresh one rather than
+  # skip, so a re-run always reflects the current classification. Closing (vs merging) leaves any
+  # linked tracking issue open, so close that too. The force-push + gh pr create below then open
+  # the replacement. If the close fails, skip the repo to avoid leaving two open PRs.
+  existing=$(gh pr list --repo "$ORG/$repo" --head "$BRANCH" --state open --json number --jq '.[0].number // empty' </dev/null)
+  if [ -n "$existing" ]; then
+    iss_old=$(gh pr view "$existing" --repo "$ORG/$repo" --json body --jq '.body // ""' </dev/null 2>/dev/null \
+                | grep -oiE 'closes #[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+    if gh pr close "$existing" --repo "$ORG/$repo" --delete-branch </dev/null 2>/dev/null; then
+      echo "CLOSE $repo #$existing (stale $BRANCH PR; replacing)"
+      [ -n "$iss_old" ] && gh issue close "$iss_old" --repo "$ORG/$repo" </dev/null 2>/dev/null \
+        && echo "  closed linked issue #$iss_old"
+    else
+      echo "WARN  $repo: could not close existing $BRANCH PR #$existing; skipping to avoid a duplicate"; continue
+    fi
   fi
 
   echo "APPLY $repo (tier=$tier private=$private jags=$jags tex=$tex route=$route)"
