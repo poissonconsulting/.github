@@ -17,6 +17,14 @@
 #   tex       auto-detected from repo contents (PDF vignettes / PDF-rendering R code) -> installs TinyTeX
 #   cran      active on CRAN (independent of tier; archived packages excluded) -> adds check-no-suggests caller + vendored rhub.yaml
 #
+# Before rolling out, a pre-flight flags important-tier candidates: packages whose deployed
+# R-CMD-check caller says tier: important but which are neither in the registry nor active on
+# CRAN, so this sync would otherwise downgrade them to unimportant. In --apply with a TTY you are
+# asked per candidate whether to add it to tools/package-tiers.tsv (kept important for this run;
+# commit that registry change to .github separately); a declined candidate is downgraded. A
+# non-interactive --apply skips candidates (no PR) rather than silently downgrade them, and a dry
+# run just lists them.
+#
 # Usage:
 #   tools/sync-ci.sh                      # dry run: classify every package + planned action
 #   tools/sync-ci.sh --apply              # render callers + open routed PRs
@@ -114,6 +122,16 @@ detect_tex() {
       && { echo true; return; }
   done
   echo false
+}
+
+# The tier currently deployed in a package's R-CMD-check caller (.yaml, falling back to the
+# pre-migration .yml), e.g. important / cran / unimportant; empty if there is no caller or no
+# tier: line. Used by the pre-flight to spot packages a sync would silently downgrade.
+deployed_tier() {
+  local repo="$1" wf
+  wf=$(raw "$repo" .github/workflows/R-CMD-check.yaml)
+  [ -n "$wf" ] || wf=$(raw "$repo" .github/workflows/R-CMD-check.yml)
+  printf '%s\n' "$wf" | awk -F: '/^[[:space:]]*tier:[[:space:]]*[A-Za-z]/{gsub(/[[:space:]]/,"",$2); print $2; exit}'
 }
 
 # Emit the packages to process. With a whitelist, iterate it directly (reliable for piloting).
@@ -235,10 +253,46 @@ echo
 
 cran_n=0 imp_n=0 unimp_n=0 priv_n=0 jags_n=0 tex_n=0 act=0 failed=""
 
+# Capture the package list once: the pre-flight and the main loop iterate the same set.
+PKGS=$(repo_source)
+
+# ---- pre-flight: important-tier candidates ---------------------------------------------------
+# Flag packages whose deployed caller says tier: important but which are neither registry-pinned
+# nor active on CRAN (computed tier unimportant) -> this sync would downgrade them. The deployed
+# tier is fetched only for these computed-unimportant packages. Confirmed candidates are appended
+# to the registry now, so the main loop (which resolves tier by awk over the registry per package)
+# picks them up as important with no further change.
+SKIP_CANDIDATES=""
+for repo in $PKGS; do
+  [ -n "$repo" ] || continue
+  case " $EXCLUDE " in *" $repo "*) continue ;; esac
+  case "$repo" in *-book|*-docs) continue ;; esac
+  [ -n "$(awk -v p="$repo" '$1==p{print $2}' "$REGISTRY" | head -1)" ] && continue   # registry-pinned
+  is_cran "$repo" && continue                                                        # active on CRAN
+  [ "$(deployed_tier "$repo")" = important ] || continue                             # deployed important only
+  if [ "$MODE" != apply ]; then
+    echo "CANDIDATE $repo (deployed=important, computed=unimportant)"
+  elif [ -t 0 ]; then
+    printf '\n%s is deployed tier=important but is not in the registry and not on CRAN.\n' "$repo" >&2
+    printf 'Add %s to the important list (tools/package-tiers.tsv) and keep it important? [y/N] ' "$repo" >&2
+    read -r ans </dev/tty || ans=""
+    case "$ans" in
+      [Yy]*) printf '%s important\n' "$repo" >> "$REGISTRY"
+             echo "  added $repo to the registry (commit + PR this package-tiers.tsv change to .github separately)" >&2 ;;
+      *)     echo "  $repo will be rolled out as unimportant (downgrade)" >&2 ;;
+    esac
+  else
+    SKIP_CANDIDATES="$SKIP_CANDIDATES $repo"
+  fi
+done
+[ -n "$SKIP_CANDIDATES" ] && echo "SKIP (non-interactive; deployed important, not formalized -> left untouched):$SKIP_CANDIDATES" >&2
+echo
+
 while IFS= read -r repo <&3; do
   [ -n "$repo" ] || continue
   case " $EXCLUDE " in *" $repo "*) continue ;; esac
   case "$repo" in *-book|*-docs) continue ;; esac
+  case " $SKIP_CANDIDATES " in *" $repo "*) echo "SKIP  $repo (important-candidate, non-interactive run)"; continue ;; esac
   sleep 1
 
   # Package/fledge gate. The contents API returns spurious empties under load, so a transient
@@ -329,7 +383,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
     fi
   ); then echo "  done $repo"; else echo "FAIL  $repo (re-run to retry)"; failed="$failed $repo"; fi
   rm -rf "$work"
-done 3< <(repo_source)
+done 3< <(printf '%s\n' "$PKGS")
 
 echo
 echo "packages: $act | cran: $cran_n | important: $imp_n | unimportant: $unimp_n | private: $priv_n | jags: $jags_n | tex: $tex_n"
