@@ -26,3 +26,5 @@ poisdata important
 poisutils important
 usepois important
 poisreport important
+# Utility packages promoted to important:
+timer important
