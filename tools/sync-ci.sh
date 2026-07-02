@@ -40,7 +40,7 @@ ORG=poissonconsulting
 BRANCH=f-ci
 OLD_BRANCH=f-standardize-actions
 ENGINE_REF="${ENGINE_REF:-v1}"
-EXCLUDE="dksandbox chktemplate poissontemplate"
+EXCLUDE="dksandbox chktemplate"
 # Preserve fledge callers under either extension during the .yml -> .yaml migration.
 KEEP_FLEDGE="fledge-bump.yaml fledge-tag-on-merge.yaml fledge-bump.yml fledge-tag-on-merge.yml"
 # Bespoke per-package workflows preserved across standardization (not replaced by a
