@@ -19,8 +19,10 @@
 #     the workflows will fail once they run.
 #
 # Usage:
-#   tools/rollout-fledge-automation.sh            # dry run: list target repos and actions
-#   tools/rollout-fledge-automation.sh --apply    # create branches + draft PRs
+#   tools/rollout-fledge-automation.sh                     # dry run: list target repos and actions
+#   tools/rollout-fledge-automation.sh --apply             # create branches + draft PRs
+#   tools/rollout-fledge-automation.sh [--apply] pkg ...   # explicit packages only; skips the
+#                                                          # fledge-managed (NEWS banner) gate
 #
 # Requires: gh (authenticated with repo + PR scope), git, base64.
 
@@ -31,10 +33,11 @@ ENGINE_REF=v1                  # version the caller workflows pin
 BRANCH=f-fledge-automation     # branch created in each target repo
 
 # Repos to exclude even when fledge-managed (sandboxes and templates).
-EXCLUDE="dksandbox chktemplate poissontemplate"
+EXCLUDE="dksandbox chktemplate"
 
 APPLY=false
-[ "${1:-}" = "--apply" ] && APPLY=true
+[ "${1:-}" = "--apply" ] && { APPLY=true; shift; }
+NAMES=("$@")
 
 repo_root=$(git rev-parse --show-toplevel)
 bump_tpl="$repo_root/workflow-templates/fledge-bump.yaml"
@@ -83,11 +86,14 @@ while IFS= read -r repo; do
   if ! printf '%s\n' "$desc" | grep -q '^Package:'; then
     nonpkg=$((nonpkg + 1)); continue
   fi
-  # Already fledge-managed? NEWS.md must carry the fledge banner; fledge::bump_version()
-  # requires a package that fledge has initialised.
-  news=$(gh api -H "Accept: application/vnd.github.raw" "repos/$full/contents/NEWS.md" 2>/dev/null || echo "")
-  if ! printf '%s\n' "$news" | grep -qi 'fledge'; then
-    echo "SKIP  $repo (not fledge-managed)"; skipped=$((skipped + 1)); continue
+  # Already fledge-managed? NEWS.md must carry the fledge banner. Skipped for explicitly
+  # named packages: the engine no-ops until a v* tag exists and generates NEWS.md itself
+  # on its first bump, so the callers are safe to deploy ahead of fledge initialisation.
+  if [ ${#NAMES[@]} -eq 0 ]; then
+    news=$(gh api -H "Accept: application/vnd.github.raw" "repos/$full/contents/NEWS.md" 2>/dev/null || echo "")
+    if ! printf '%s\n' "$news" | grep -qi 'fledge'; then
+      echo "SKIP  $repo (not fledge-managed)"; skipped=$((skipped + 1)); continue
+    fi
   fi
   # Already rolled out? (either extension during the .yml -> .yaml migration)
   if gh api "repos/$full/contents/.github/workflows/fledge-bump.yaml" --jq '.path' >/dev/null 2>&1 \
@@ -116,9 +122,15 @@ while IFS= read -r repo; do
 
 Requires the \`poisson-fledge-bot\` GitHub App and the \`FLEDGE_APP_ID\` / \`FLEDGE_APP_PRIVATE_KEY\` org secrets to be active. See poissonconsulting/.github/fledge-automation.md." >/dev/null
   echo "ADDED $repo (draft PR opened)"; added=$((added + 1))
-done < <(gh repo list "$ORG" --no-archived --source --limit 400 \
-           --json name,defaultBranchRef \
-           --jq '.[] | select(.defaultBranchRef.name != null) | .name')
+done < <(
+  if [ ${#NAMES[@]} -gt 0 ]; then
+    printf '%s\n' "${NAMES[@]}"
+  else
+    gh repo list "$ORG" --no-archived --source --limit 400 \
+      --json name,defaultBranchRef \
+      --jq '.[] | select(.defaultBranchRef.name != null) | .name'
+  fi
+)
 
 echo
 echo "Done. packages targeted: $added, skipped: $skipped, non-packages scanned: $nonpkg"
