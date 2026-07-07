@@ -14,6 +14,8 @@
 #   tier      registry override > active-on-CRAN > unimportant (default)
 #   private   auto-detected from repo visibility   -> drives GITHUB_PAT (PRIVATE_ACTIONS_PAT)
 #   jags      auto-detected from DESCRIPTION / workflows
+#   cmdstan   auto-detected from DESCRIPTION (cmdstanr/smbr2 dep or CmdStan SystemRequirements)
+#             -> installs the CmdStan toolchain in the pkgdown build
 #   tex       auto-detected from repo contents (PDF vignettes / PDF-rendering R code) -> installs TinyTeX
 #   cran      active on CRAN (independent of tier; archived packages excluded) -> adds check-no-suggests caller + vendored rhub.yaml
 #
@@ -150,7 +152,7 @@ repo_source() {
   printf '%s\n' "$out"
 }
 
-# Render the caller workflows into $1=.github/workflows dir using tier/jags/private/cran in scope.
+# Render the caller workflows into $1=.github/workflows dir using tier/jags/cmdstan/private/cran in scope.
 render_callers() {
   local wf="$1" eng="$ENGINE_REF"
   cat > "$wf/R-CMD-check.yaml" <<YAML
@@ -205,6 +207,7 @@ jobs:
   pkgdown:
     uses: $ORG/.github/.github/workflows/pkgdown.yaml@$eng
     with:
+      cmdstan: $cmdstan
       private: $private
     secrets: inherit
 YAML
@@ -251,7 +254,7 @@ fi
 [ "$MODE" = apply ] || echo "DRY RUN (--apply to act, --close-old to retire the old rollout)"
 echo
 
-cran_n=0 imp_n=0 unimp_n=0 priv_n=0 jags_n=0 tex_n=0 act=0 failed=""
+cran_n=0 imp_n=0 unimp_n=0 priv_n=0 jags_n=0 cmdstan_n=0 tex_n=0 act=0 failed=""
 
 # Capture the package list once: the pre-flight and the main loop iterate the same set.
 PKGS=$(repo_source)
@@ -324,9 +327,19 @@ while IFS= read -r repo <&3; do
   # jags from DESCRIPTION: a JAGS R dependency or a JAGS SystemRequirements.
   # Match the package names as whole words (not a bare "jags" substring, which also hit
   # prose in the Description field and added the JAGS installs to packages that don't use it).
+  # jmbr pulls in rjags transitively, but its name appears in prose too (embr's Description
+  # names the whole family), so match it only as a tidy one-per-line dependency entry.
   jags=false
   printf '%s\n' "$desc" | grep -qiE '\b(rjags|runjags|jagsUI|R2jags)\b' && jags=true
+  printf '%s\n' "$desc" | grep -qiE '^[[:space:]]+jmbr,?[[:space:]]*$' && jags=true
   printf '%s\n' "$desc" | grep -qiE '^SystemRequirements:.*JAGS' && jags=true
+
+  # cmdstan from DESCRIPTION: a cmdstanr/smbr2 dependency (tidy one-per-line entries, since
+  # smbr appears in prose) or a CmdStan SystemRequirements. Drives the CmdStan toolchain
+  # install in the pkgdown build, where articles fit Stan models for real.
+  cmdstan=false
+  printf '%s\n' "$desc" | grep -qiE '^[[:space:]]+(cmdstanr|smbr2),?[[:space:]]*$' && cmdstan=true
+  printf '%s\n' "$desc" | grep -qiE '^SystemRequirements:.*CmdStan' && cmdstan=true
 
   # tex auto-detected from repo contents (PDF vignettes or PDF-rendering R code).
   default=$(gh_try gh api "repos/$ORG/$repo" --jq '.default_branch' </dev/null || echo main)
@@ -336,10 +349,10 @@ while IFS= read -r repo <&3; do
   route=normal; [ "$owner" != joethorley ] && route="review -> @${owner:-???}"
 
   case "$tier" in cran) cran_n=$((cran_n+1));; important) imp_n=$((imp_n+1));; *) unimp_n=$((unimp_n+1));; esac
-  [ "$private" = true ] && priv_n=$((priv_n+1)); [ "$jags" = true ] && jags_n=$((jags_n+1)); [ "$tex" = true ] && tex_n=$((tex_n+1)); act=$((act+1))
+  [ "$private" = true ] && priv_n=$((priv_n+1)); [ "$jags" = true ] && jags_n=$((jags_n+1)); [ "$cmdstan" = true ] && cmdstan_n=$((cmdstan_n+1)); [ "$tex" = true ] && tex_n=$((tex_n+1)); act=$((act+1))
 
   if [ "$MODE" != apply ]; then
-    printf 'TODO  %-22s tier=%-11s cran=%-5s private=%-5s jags=%-5s tex=%-5s route=%s\n' "$repo" "$tier" "$cran" "$private" "$jags" "$tex" "$route"
+    printf 'TODO  %-22s tier=%-11s cran=%-5s private=%-5s jags=%-5s cmdstan=%-5s tex=%-5s route=%s\n' "$repo" "$tier" "$cran" "$private" "$jags" "$cmdstan" "$tex" "$route"
     continue
   fi
 
@@ -361,7 +374,7 @@ while IFS= read -r repo <&3; do
     fi
   fi
 
-  echo "APPLY $repo (tier=$tier private=$private jags=$jags tex=$tex route=$route)"
+  echo "APPLY $repo (tier=$tier private=$private jags=$jags cmdstan=$cmdstan tex=$tex route=$route)"
   work=$(mktemp -d)
   if (
     set -e
@@ -382,7 +395,7 @@ keeping the fledge callers.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
     git push -q -u --force origin "$BRANCH"
-    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests'); fledge callers unchanged."
+    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests'); fledge callers unchanged."
     default=$(gh api "repos/$ORG/$repo" --jq '.default_branch')
     if [ "$owner" = joethorley ]; then
       gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
@@ -400,6 +413,6 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 done 3< <(printf '%s\n' "$PKGS")
 
 echo
-echo "packages: $act | cran: $cran_n | important: $imp_n | unimportant: $unimp_n | private: $priv_n | jags: $jags_n | tex: $tex_n"
+echo "packages: $act | cran: $cran_n | important: $imp_n | unimportant: $unimp_n | private: $priv_n | jags: $jags_n | cmdstan: $cmdstan_n | tex: $tex_n"
 [ -n "$failed" ] && echo "FAILED (re-run):$failed"
 [ "$MODE" = apply ] || echo "Dry run. Re-run with --apply (optionally package names) to act."
