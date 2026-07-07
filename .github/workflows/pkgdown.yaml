@@ -1,11 +1,17 @@
 # Reusable pkgdown build + deploy to gh-pages. Callers must use `secrets: inherit`.
 # private=true runs with PRIVATE_ACTIONS_PAT so private dependencies resolve.
+# cmdstan=true installs the CmdStan toolchain so articles that fit Stan models via
+# cmdstanr (e.g. through smbr2) can compile and sample during the site build.
+# cmdstanr itself must arrive through the package's dependency tree.
 
 name: pkgdown
 
 on:
   workflow_call:
     inputs:
+      cmdstan:
+        type: boolean
+        default: false
       private:
         type: boolean
         default: false
@@ -35,6 +41,13 @@ jobs:
         with:
           extra-packages: any::pkgdown, local::.
           needs: website
+
+      - name: Install CmdStan
+        if: ${{ inputs.cmdstan }}
+        run: |
+          cmdstanr::check_cmdstan_toolchain(fix = TRUE, quiet = TRUE)
+          cmdstanr::install_cmdstan(cores = 2, quiet = TRUE)
+        shell: Rscript {0}
 
       - name: Build site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
