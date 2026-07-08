@@ -80,13 +80,16 @@ For initial testing, temporarily change the caller `uses:` line to `@<test-branc
 ## Rollout
 
 `tools/rollout-fledge-automation.sh` adds the two caller workflows to every non-forked, non-archived repo with a root `DESCRIPTION` (an R package) and opens a draft PR for each.
-It is idempotent (skips repos already carrying `fledge-bump.yml` or an open rollout PR) and handles `main` and `master` default branches.
+It is idempotent (skips repos already carrying `fledge-bump.yaml` or `fledge-bump.yml`, or an open rollout PR) and handles `main` and `master` default branches.
 Run it from a checkout of this repo after the `v1` tag exists:
 
 ```sh
-tools/rollout-fledge-automation.sh            # dry run: list target repos and actions
-tools/rollout-fledge-automation.sh --apply    # create branches + draft PRs
+tools/rollout-fledge-automation.sh                     # dry run: list target repos and actions
+tools/rollout-fledge-automation.sh --apply             # create branches + draft PRs
+tools/rollout-fledge-automation.sh [--apply] pkg ...   # explicit packages only
 ```
+
+Explicitly named packages skip the fledge-managed (NEWS banner) gate: the engine no-ops until a `v*` tag exists and generates `NEWS.md` itself on the first bump, so the callers are safe to deploy ahead of fledge initialisation.
 
 The PRs are opened as drafts; they are harmless until the App and org secrets are active.
 This pairs with the same governance process that handles CODEOWNERS.
