@@ -1,5 +1,8 @@
 # Reusable test-coverage. Callers must use `secrets: inherit`.
 # tex=true installs TinyTeX so tests that render PDFs can compile LaTeX under covr.
+# cmdstan=true installs the CmdStan toolchain so tests that fit Stan models via cmdstanr
+# (e.g. through smbr2) can compile and sample under covr. cmdstanr itself must arrive
+# through the package's dependency tree.
 # private=true runs with PRIVATE_ACTIONS_PAT so private dependencies resolve.
 
 name: test-coverage
@@ -7,6 +10,9 @@ name: test-coverage
 on:
   workflow_call:
     inputs:
+      cmdstan:
+        type: boolean
+        default: false
       tex:
         type: boolean
         default: false
@@ -41,6 +47,13 @@ jobs:
         with:
           extra-packages: any::covr, any::xml2
           needs: coverage
+
+      - name: Install CmdStan
+        if: ${{ inputs.cmdstan }}
+        run: |
+          cmdstanr::check_cmdstan_toolchain(fix = TRUE, quiet = TRUE)
+          cmdstanr::install_cmdstan(cores = 2, quiet = TRUE)
+        shell: Rscript {0}
 
       - name: Test coverage
         run: |
