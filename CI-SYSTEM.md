@@ -12,7 +12,7 @@ Reusable workflows (`.github/workflows/`, `workflow_call`; callers must use `sec
 | --- | --- | --- |
 | `R-CMD-check.yaml` | `tier`, `jags`, `tex`, `private` | R CMD check; the tier selects the OS/R matrix and `error_on`. |
 | `test-coverage.yaml` | `tex`, `private` | covr + Codecov. |
-| `pkgdown.yaml` | `private` | Build + deploy the docs site to `gh-pages`. |
+| `pkgdown.yaml` | `cmdstan`, `private` | Build + deploy the docs site to `gh-pages`. |
 | `check-no-suggests.yaml` | `private` | R CMD check with hard dependencies only (active CRAN packages). |
 
 R-hub (`workflow-templates/rhub.yaml`) is dispatch-triggered and r-hub-owned, so it is vendored into a package as a template rather than invoked as a reusable caller.
@@ -31,12 +31,13 @@ Per package, the sync tool resolves:
 
 - **tier**: registry entry, else active-on-CRAN -> `cran`, else `unimportant` (default).
 - **private**: from repo visibility -> selects `GITHUB_PAT` (`PRIVATE_ACTIONS_PAT` for private repos so private dependencies install; `GITHUB_TOKEN` otherwise).
-- **jags**: from DESCRIPTION (`rjags|runjags|jagsUI|R2jags`, or a JAGS `SystemRequirements`) -> adds the macOS/Windows JAGS installs (Linux gets JAGS via `setup-r-dependencies` system requirements).
+- **jags**: from DESCRIPTION (`rjags|runjags|jagsUI|R2jags`, a tidy one-per-line `jmbr` dependency entry, or a JAGS `SystemRequirements`) -> adds the macOS/Windows JAGS installs (Linux gets JAGS via `setup-r-dependencies` system requirements).
+- **cmdstan**: from DESCRIPTION (a tidy one-per-line `cmdstanr` or `smbr2` dependency entry, or a CmdStan `SystemRequirements`) -> installs the CmdStan toolchain in the pkgdown build.
 - **tex**: from repo contents (a `.Rnw` vignette, or an `.Rmd`/R source targeting a LaTeX output) -> installs TinyTeX.
 - **cran**: active on CRAN -> also gets the `check-no-suggests` caller and the vendored `rhub.yaml`, independent of tier.
 
 Only `tier` is hand-maintained, and only to promote a non-CRAN package to `important` (or force a tier).
-`private`, `jags`, `tex`, and CRAN membership are auto-detected at sync time and never listed in the registry.
+`private`, `jags`, `cmdstan`, `tex`, and CRAN membership are auto-detected at sync time and never listed in the registry.
 
 ### CRAN membership
 
@@ -98,7 +99,7 @@ The one-time go-live sequence and rollout status are recorded in `GO-LIVE.md` an
 ## Prerequisites
 
 - `gh` authenticated (with `workflow` scope for `--apply`), `git` (SSH), and `curl`.
-- `PRIVATE_ACTIONS_PAT`, `CODECOV_TOKEN` org secrets available to the package repos.
+- `PRIVATE_ACTIONS_PAT`, `CODECOV_TOKEN`, and `GOOGLE_MAPS_ELEVATION_API_KEY` org secrets available to the package repos (the last is passed into the check and coverage environments for packages whose tests call the elevation API).
 - Callers pin the reusable workflows at `@v1`; keep the `v1` tag pointing at the current `.github` main.
 
 ## Notes

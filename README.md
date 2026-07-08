@@ -4,7 +4,7 @@ We help organizations understand biological systems through data and decision an
 ## Continuous integration
 
 This repo centrally manages GitHub Actions for the org's R packages.
-CI logic lives in reusable workflows here; each package carries thin caller workflows that pass its classification (tier, plus auto-detected private/jags/tex/CRAN), so updating a reusable workflow propagates to every package on its next run.
+CI logic lives in reusable workflows here; each package carries thin caller workflows that pass its classification (tier, plus auto-detected private/jags/cmdstan/tex/CRAN), so updating a reusable workflow propagates to every package on its next run.
 
 Day-to-day use:
 
