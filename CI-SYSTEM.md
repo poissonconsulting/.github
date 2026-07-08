@@ -10,8 +10,8 @@ Reusable workflows (`.github/workflows/`, `workflow_call`; callers must use `sec
 
 | Workflow | Inputs | Purpose |
 | --- | --- | --- |
-| `R-CMD-check.yaml` | `tier`, `jags`, `tex`, `private` | R CMD check; the tier selects the OS/R matrix and `error_on`. |
-| `test-coverage.yaml` | `tex`, `private` | covr + Codecov. |
+| `R-CMD-check.yaml` | `tier`, `jags`, `cmdstan`, `tex`, `private` | R CMD check; the tier selects the OS/R matrix and `error_on`. |
+| `test-coverage.yaml` | `cmdstan`, `tex`, `private` | covr + Codecov. |
 | `pkgdown.yaml` | `cmdstan`, `private` | Build + deploy the docs site to `gh-pages`. |
 | `check-no-suggests.yaml` | `private` | R CMD check with hard dependencies only (active CRAN packages). |
 
@@ -32,7 +32,7 @@ Per package, the sync tool resolves:
 - **tier**: registry entry, else active-on-CRAN -> `cran`, else `unimportant` (default).
 - **private**: from repo visibility -> selects `GITHUB_PAT` (`PRIVATE_ACTIONS_PAT` for private repos so private dependencies install; `GITHUB_TOKEN` otherwise).
 - **jags**: from DESCRIPTION (`rjags|runjags|jagsUI|R2jags`, a tidy one-per-line `jmbr` dependency entry, or a JAGS `SystemRequirements`) -> adds the macOS/Windows JAGS installs (Linux gets JAGS via `setup-r-dependencies` system requirements).
-- **cmdstan**: from DESCRIPTION (a tidy one-per-line `cmdstanr` or `smbr2` dependency entry, or a CmdStan `SystemRequirements`) -> installs the CmdStan toolchain in the pkgdown build.
+- **cmdstan**: from DESCRIPTION (a tidy one-per-line `cmdstanr` or `smbr2` dependency entry, or a CmdStan `SystemRequirements`) -> installs the CmdStan toolchain in the check, coverage, and pkgdown builds.
 - **tex**: from repo contents (a `.Rnw` vignette, or an `.Rmd`/R source targeting a LaTeX output) -> installs TinyTeX.
 - **cran**: active on CRAN -> also gets the `check-no-suggests` caller and the vendored `rhub.yaml`, independent of tier.
 
