@@ -101,9 +101,12 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
+      # local::. pre-installs the package into the site library so quarto vignettes
+      # build on Windows, where the quarto subprocess cannot see the temporary
+      # library R CMD build installs into (quarto-dev/quarto-r#217).
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          extra-packages: any::rcmdcheck, local::.
           needs: check
 
       - name: Install CmdStan
