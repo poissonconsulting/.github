@@ -105,6 +105,17 @@ jobs:
       # build on Windows, where the quarto subprocess cannot see the temporary
       # library R CMD build installs into (quarto-dev/quarto-r#217).
       - uses: r-lib/actions/setup-r-dependencies@v2
+        id: deps
+        continue-on-error: true
+        with:
+          extra-packages: any::rcmdcheck, local::.
+          needs: check
+
+      # Retry once: pak's GitHub GraphQL POST is not retried by libcurl and fails
+      # when GitHub drops the idle connection between resolution waves, mainly on
+      # Windows (r-lib/pkgcache#140). Remove once the pkgcache fix is released.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        if: steps.deps.outcome == 'failure'
         with:
           extra-packages: any::rcmdcheck, local::.
           needs: check
