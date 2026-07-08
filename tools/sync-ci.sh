@@ -15,7 +15,7 @@
 #   private   auto-detected from repo visibility   -> drives GITHUB_PAT (PRIVATE_ACTIONS_PAT)
 #   jags      auto-detected from DESCRIPTION / workflows
 #   cmdstan   auto-detected from DESCRIPTION (cmdstanr/smbr2 dep or CmdStan SystemRequirements)
-#             -> installs the CmdStan toolchain in the pkgdown build
+#             -> installs the CmdStan toolchain in check, coverage, and pkgdown builds
 #   tex       auto-detected from repo contents (PDF vignettes / PDF-rendering R code) -> installs TinyTeX
 #   cran      active on CRAN (independent of tier; archived packages excluded) -> adds check-no-suggests caller + vendored rhub.yaml
 #
@@ -170,6 +170,7 @@ jobs:
     with:
       tier: $tier
       jags: $jags
+      cmdstan: $cmdstan
       tex: $tex
       private: $private
     secrets: inherit
@@ -187,6 +188,7 @@ jobs:
   test-coverage:
     uses: $ORG/.github/.github/workflows/test-coverage.yaml@$eng
     with:
+      cmdstan: $cmdstan
       tex: $tex
       private: $private
     secrets: inherit

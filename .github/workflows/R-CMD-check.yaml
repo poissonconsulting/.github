@@ -4,6 +4,9 @@
 #   tier=important   -> macOS+Windows+Ubuntu-release + Ubuntu-oldrel-1,  error_on=warning
 #   tier=unimportant -> Ubuntu-release only,                              error_on=error  (default)
 # jags=true adds the macOS/Windows JAGS installs (Linux gets JAGS via setup-r-dependencies sysreqs).
+# cmdstan=true installs the CmdStan toolchain so tests that fit Stan models via cmdstanr
+# (e.g. through smbr2) can compile and sample during checks. cmdstanr itself must arrive
+# through the package's dependency tree.
 # tex=true installs TinyTeX so packages that build PDFs (PDF vignettes, or report engines like
 # poisreport::knit_report) can compile LaTeX during checks.
 # private=true runs with PRIVATE_ACTIONS_PAT so private dependencies resolve.
@@ -17,6 +20,9 @@ on:
         type: string
         default: unimportant
       jags:
+        type: boolean
+        default: false
+      cmdstan:
         type: boolean
         default: false
       tex:
@@ -95,10 +101,20 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
+      # local::. pre-installs the package into the site library so quarto vignettes
+      # build on Windows, where the quarto subprocess cannot see the temporary
+      # library R CMD build installs into (quarto-dev/quarto-r#217).
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          extra-packages: any::rcmdcheck, local::.
           needs: check
+
+      - name: Install CmdStan
+        if: ${{ inputs.cmdstan }}
+        run: |
+          cmdstanr::check_cmdstan_toolchain(fix = TRUE, quiet = TRUE)
+          cmdstanr::install_cmdstan(cores = 2, quiet = TRUE)
+        shell: Rscript {0}
 
       - uses: r-lib/actions/check-r-package@v2
         with:
