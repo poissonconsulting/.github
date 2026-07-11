@@ -99,6 +99,10 @@ jobs:
       - name: Dev bump (automatic, direct to default branch)
         if: steps.detect.outputs.run == 'true' && steps.detect.outputs.kind == 'dev'
         env:
+          # fledge connects to origin via gert/libgit2, which ignores the
+          # checkout http.extraheader credential; on private repos the
+          # anonymous connect fails unless GITHUB_PAT is set.
+          GITHUB_PAT: ${{ steps.app-token.outputs.token }}
           DEFAULT_BRANCH: ${{ steps.detect.outputs.default_branch }}
         run: |
           set -euo pipefail
@@ -116,6 +120,7 @@ jobs:
         if: steps.detect.outputs.run == 'true' && steps.detect.outputs.kind == 'release'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_PAT: ${{ steps.app-token.outputs.token }}
           PR_BRANCH: ${{ inputs.pr-branch }}
           LAST_TAG: ${{ steps.detect.outputs.last_tag }}
           DEFAULT_BRANCH: ${{ steps.detect.outputs.default_branch }}
