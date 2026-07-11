@@ -59,6 +59,11 @@ jobs:
           git config user.email "${bot_id}+${SLUG}[bot]@users.noreply.github.com"
 
       - name: Tag merged version
+        env:
+          # fledge connects to origin via gert/libgit2, which ignores the
+          # checkout http.extraheader credential; on private repos the
+          # anonymous connect fails unless GITHUB_PAT is set.
+          GITHUB_PAT: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           Rscript -e 'options(usethis.quiet = TRUE); fledge::tag_version()'
