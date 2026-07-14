@@ -43,7 +43,8 @@ BRANCH=f-ci
 OLD_BRANCH=f-standardize-actions
 ENGINE_REF="${ENGINE_REF:-v1}"
 EXCLUDE="dksandbox chktemplate"
-# Preserve fledge callers under either extension during the .yml -> .yaml migration.
+# Fledge callers are migrated, not preserved: a package with a fledge caller under either
+# extension gets the current .yaml templates and any .yml copy is dropped.
 KEEP_FLEDGE="fledge-bump.yaml fledge-tag-on-merge.yaml fledge-bump.yml fledge-tag-on-merge.yml"
 # Bespoke per-package workflows preserved across standardization (not replaced by a
 # reusable caller): JOSS paper build and the Slack package-check notifier.
@@ -387,17 +388,22 @@ while IFS= read -r repo <&3; do
     for k in $KEEP_FLEDGE $KEEP_PRESERVE; do [ -f ".github/workflows/$k" ] && cp ".github/workflows/$k" "$kp/"; done
     rm -rf .github/workflows && mkdir -p .github/workflows
     render_callers .github/workflows
-    cp "$kp"/* .github/workflows/ 2>/dev/null || true
+    for k in $KEEP_PRESERVE; do [ -f "$kp/$k" ] && cp "$kp/$k" .github/workflows/; done
+    # Migrate fledge callers: any package that had one (either extension) gets the
+    # current .yaml templates; stale .yml copies are not restored.
+    for f in fledge-bump fledge-tag-on-merge; do
+      { [ -f "$kp/$f.yaml" ] || [ -f "$kp/$f.yml" ]; } && cp "$root/workflow-templates/$f.yaml" .github/workflows/
+    done
     git add -A
     git commit -q -m "Standardize CI via reusable workflows (tier: $tier)
 
 Replace ad hoc workflows with thin callers to the reusable CI in
 $ORG/.github (R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests')),
-keeping the fledge callers.
+migrating any fledge callers to the current .yaml templates.
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
     git push -q -u --force origin "$BRANCH"
-    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests'); fledge callers unchanged."
+    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests'); fledge callers migrated to the .yaml templates where present."
     default=$(gh api "repos/$ORG/$repo" --jq '.default_branch')
     if [ "$owner" = joethorley ]; then
       gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
