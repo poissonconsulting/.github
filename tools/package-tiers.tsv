@@ -1,38 +1,25 @@
-# CI tier registry for poissonconsulting R packages, consumed by tools/sync-ci.sh.
 #
-# Format: one "<package> <tier>" per line. Tier is one of: cran | important | unimportant.
-# Lines starting with # are comments.
 #
-# Resolution per package (in tools/sync-ci.sh):
+#
+#
 #   1. if listed here              -> that tier
 #   2. else if detected on CRAN    -> cran
 #   3. else                        -> unimportant   (default)
-#
-# So you normally only list packages to PROMOTE to "important" (non-CRAN packages that still
-# warrant a fuller matrix), or to force a tier. CRAN packages are auto-detected and additionally
-# get the check-no-suggests workflow. private and jags are auto-detected too (never listed here).
-#
-# === FIRST PASS — review and adjust ===
-# Core Bayesian engines and analysis infrastructure (fuller matrix, not necessarily on CRAN):
-embr important
-smbr important
-smbr2 important
-jmbr important
-tmbr important
-mcmcderive important
-subfoldr2 important
-poispkgs important
-poisdata important
-poisutils important
-usepois important
-poisreport important
-# Utility packages promoted to important:
-timer important
-# Policy: every poissonconsulting package published on the r-universe
-# (poissonconsulting.r-universe.dev) is important unless it is active on CRAN
 # (active-CRAN packages are auto-detected and get the fuller cran tier + check-no-suggests).
+# (poissonconsulting.r-universe.dev) is important unless it is active on CRAN
+# === FIRST PASS — review and adjust ===
 # Archived-from-CRAN packages (e.g. batchr, err, flobr, dbflobr, readwritesqlite, rpdo) count as
+# CI tier registry for poissonconsulting R packages, consumed by tools/sync-ci.sh.
+# Core Bayesian engines and analysis infrastructure (fuller matrix, not necessarily on CRAN):
+# Format: one "<package> <tier>" per line. Tier is one of: cran | important | unimportant.
+# get the check-no-suggests workflow. private and jags are auto-detected too (never listed here).
+# Lines starting with # are comments.
 # non-CRAN and so are listed here. Add a package here when it is added to the r-universe.
+# Policy: every poissonconsulting package published on the r-universe
+# Resolution per package (in tools/sync-ci.sh):
+# So you normally only list packages to PROMOTE to "important" (non-CRAN packages that still
+# Utility packages promoted to important:
+# warrant a fuller matrix), or to force a tier. CRAN packages are auto-detected and additionally
 batchr important
 bauw important
 bboudata important
@@ -41,9 +28,12 @@ bboushiny important
 bbousims important
 bbousuite important
 bboutools important
+bisonpicsuite important
+bisonpictools important
 checkr important
 curtisquadata important
 dbflobr important
+embr important
 envirotox important
 err important
 evrfish important
@@ -51,13 +41,19 @@ flobr important
 fwapgr important
 fwatlasbc important
 gsdd important
+jmbr important
 klexdatr important
 kootlake important
 mcmcdata important
+mcmcderive important
 newdata important
 pgfeatureserv important
+poisdata important
 poispalette important
+poispkgs important
+poisreport important
 poissontemplate important
+poisutils important
 readwritesqlite important
 rescale important
 rpdo important
@@ -66,11 +62,17 @@ shinyssdtools important
 shinywqbench important
 shinywqg important
 shinyypr important
+smbr important
+smbr2 important
 ssdsims important
 ssdsuite important
 ssdtests important
 ssdvignettes important
+subfoldr2 important
 subreport important
+timer important
+tmbr important
+usepois important
 wqbc important
 wqbench important
 wqbenchdata important
