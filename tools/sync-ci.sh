@@ -161,7 +161,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
 permissions:
   contents: read
 jobs:
@@ -181,7 +181,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
 permissions:
   contents: read
 jobs:
@@ -199,7 +199,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
   release:
     types: [published]
   workflow_dispatch:
@@ -220,7 +220,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, dev]
 permissions:
   contents: read
 jobs:
