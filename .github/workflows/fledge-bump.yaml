@@ -50,7 +50,10 @@ jobs:
         run: |
           set -euo pipefail
           default_branch=$(git rev-parse --abbrev-ref HEAD)
-          last_tag=$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)
+          # Nearest v* tag reachable from HEAD, not the highest version: a stale
+          # release tag (e.g. v0.0.1) can outrank the current dev series
+          # (v0.0.0.9XXX) and cause a daily bump loop.
+          last_tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
           if [ -z "$last_tag" ]; then
             echo "No v* tag found; nothing to do."
             echo "run=false" >> "$GITHUB_OUTPUT"
