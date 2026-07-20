@@ -44,8 +44,15 @@ jobs:
           r-version: ${{ inputs.r-version }}
           use-public-rspm: true
 
-      - name: Install fledge
-        run: install.packages("fledge")
+      - name: Install pak
+        run: install.packages("pak")
+        shell: Rscript {0}
+
+      - name: Install fledge (dev)
+        # Pinned to a commit (not tracking HEAD) so upstream changes land only when this
+        # SHA is deliberately bumped, matching the @v1 discipline used for this repo's
+        # own reusable workflows. cynkra/fledge@9453c2b (2026-07-02, r-universe 0.1.99.9060).
+        run: pak::pkg_install("cynkra/fledge@9453c2b42692608e0758ae2035470fc0066cca5d")
         shell: Rscript {0}
 
       - name: Configure git identity
