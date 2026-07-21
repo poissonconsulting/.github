@@ -94,6 +94,31 @@ Explicitly named packages skip the fledge-managed (NEWS banner) gate: the engine
 The PRs are opened as drafts; they are harmless until the App and org secrets are active.
 This pairs with the same governance process that handles CODEOWNERS.
 
+## Documentation / book repos
+
+A repo named `*-book` or `*-docs` (the org's naming convention for documentation sites) is
+excluded from bulk fledge rollout by default: it typically has no `Package:` field in
+`DESCRIPTION`, so it fails the structural gate both sweep tools use to recognise a package.
+The underlying fledge engine has no such requirement - it only reads `v*` tags and
+`DESCRIPTION`'s `Version:` field - so one book can still be onboarded deliberately:
+
+- Give it a minimal package-shaped `DESCRIPTION` (`Package: <name>`, `Version: 0.0.0.9000`).
+- Push the first tag as **dev-shaped** (`v0.0.0.9000`, four components), not a release tag.
+  This keeps it permanently on fledge-bump's direct-push dev path: there is no CRAN-style
+  release cycle for a book, so the reviewed release-PR path (and its CODEOWNERS dependency)
+  is never triggered.
+- Run `tools/rollout-fledge-automation.sh --apply <repo>` exactly as for a new package; the
+  explicit name bypasses the NEWS-banner gate, and the added `Package:` field satisfies the
+  structural gate.
+
+This does not make the repo eligible for `tools/sync-ci.sh`: that script hard-excludes any
+`*-book`/`*-docs` name regardless of explicit naming, because it unconditionally renders
+R-CMD-check/coverage/pkgdown callers for everything it processes, none of which apply to a
+book. So a book's fledge callers, once installed, are never refreshed by the ongoing sync
+sweep the way a package's are. If the fledge caller *templates* themselves are ever updated
+(distinct from the reusable engine, which needs no caller-side changes to pick up a fix), a
+book repo's two caller files must be re-copied into it by hand.
+
 ## Testing checklist
 
 Use non-CRAN packages where Joe is the maintainer, so a dev bump cannot affect a CRAN release.
