@@ -42,16 +42,20 @@ ORG=poissonconsulting
 BRANCH=f-ci
 OLD_BRANCH=f-standardize-actions
 ENGINE_REF="${ENGINE_REF:-v1}"
-EXCLUDE="dksandbox chktemplate"
 # Fledge callers are migrated, not preserved: a package with a fledge caller under either
 # extension gets the current .yaml templates and any .yml copy is dropped.
 KEEP_FLEDGE="fledge-bump.yaml fledge-tag-on-merge.yaml fledge-bump.yml fledge-tag-on-merge.yml"
 # Bespoke per-package workflows preserved across standardization (not replaced by a
 # reusable caller): JOSS paper build and the Slack package-check notifier.
 KEEP_PRESERVE="paper.yaml slack-check-package.yaml"
-root=$(git rev-parse --show-toplevel)
-REGISTRY="$root/tools/package-tiers.tsv"
-RHUB_TPL="$root/workflow-templates/rhub.yaml"
+repo_root=$(git rev-parse --show-toplevel)
+REGISTRY="$repo_root/tools/package-tiers.tsv"
+RHUB_TPL="$repo_root/workflow-templates/rhub.yaml"
+
+# Repos to exclude even when fledge-managed (sandboxes and templates); shared with
+# tools/rollout-fledge-automation.sh and tools/set-fledge-branch-protection.sh.
+source "$repo_root/tools/excluded-repos.sh"
+EXCLUDE="$SYNC_CI_EXCLUDE"
 
 MODE=dry
 case "${1:-}" in
@@ -392,7 +396,7 @@ while IFS= read -r repo <&3; do
     # Migrate fledge callers: any package that had one (either extension) gets the
     # current .yaml templates; stale .yml copies are not restored.
     for f in fledge-bump fledge-tag-on-merge; do
-      { [ -f "$kp/$f.yaml" ] || [ -f "$kp/$f.yml" ]; } && cp "$root/workflow-templates/$f.yaml" .github/workflows/
+      { [ -f "$kp/$f.yaml" ] || [ -f "$kp/$f.yml" ]; } && cp "$repo_root/workflow-templates/$f.yaml" .github/workflows/
     done
     git add -A
     git commit -q -m "Standardize CI via reusable workflows (tier: $tier)

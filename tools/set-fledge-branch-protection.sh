@@ -20,17 +20,23 @@
 #   tools/set-fledge-branch-protection.sh           # dry run: report current vs desired
 #   tools/set-fledge-branch-protection.sh --apply   # apply changes
 #
-# Requires: gh (admin on the target repos), jq.
+# Requires: gh (admin on the target repos), jq, git (to locate the shared exclude registry).
 
 set -euo pipefail
 
 ORG=poissonconsulting
 APP_SLUG=poisson-fledge-bot
-EXCLUDE="dksandbox chktemplate poissontemplate"
 
 APPLY=false
 [ "${1:-}" = "--apply" ] && APPLY=true
 command -v jq >/dev/null || { echo "jq is required (brew install jq)" >&2; exit 1; }
+
+repo_root=$(git rev-parse --show-toplevel)
+
+# Repos to exclude even when otherwise eligible (sandboxes and templates); shared with
+# tools/rollout-fledge-automation.sh and tools/sync-ci.sh.
+source "$repo_root/tools/excluded-repos.sh"
+EXCLUDE="$BRANCH_PROTECTION_EXCLUDE"
 
 $APPLY || echo "DRY RUN (pass --apply to change branch protection)"
 echo
