@@ -25,6 +25,7 @@ Callers run on pushes to `main`/`master` and on pull requests targeting `main`, 
 Tooling:
 
 - `tools/package-tiers.tsv` — the tier registry (source of truth for `tier`).
+- `tools/excluded-repos.sh` — shared exclude registry (sandboxes/templates), sourced by `sync-ci.sh`, `rollout-fledge-automation.sh`, and `set-fledge-branch-protection.sh`.
 - `tools/sync-ci.sh` — renders callers from the registry + auto-detection and opens routed PRs.
 
 ## Classification
