@@ -32,14 +32,17 @@ ORG=poissonconsulting
 ENGINE_REF=v1                  # version the caller workflows pin
 BRANCH=f-fledge-automation     # branch created in each target repo
 
-# Repos to exclude even when fledge-managed (sandboxes and templates).
-EXCLUDE="dksandbox chktemplate"
-
 APPLY=false
 [ "${1:-}" = "--apply" ] && { APPLY=true; shift; }
 NAMES=("$@")
 
 repo_root=$(git rev-parse --show-toplevel)
+
+# Repos to exclude even when fledge-managed (sandboxes and templates); shared with
+# tools/sync-ci.sh and tools/set-fledge-branch-protection.sh.
+source "$repo_root/tools/excluded-repos.sh"
+EXCLUDE="$ROLLOUT_EXCLUDE"
+
 bump_tpl="$repo_root/workflow-templates/fledge-bump.yaml"
 tag_tpl="$repo_root/workflow-templates/fledge-tag-on-merge.yaml"
 for f in "$bump_tpl" "$tag_tpl"; do
