@@ -29,6 +29,8 @@ If no new commits have landed, the open PR is left untouched so its approval and
 | `.github/workflows/fledge-bump.yaml` | each package | Thin caller (copied from the template). |
 | `.github/workflows/fledge-tag-on-merge.yaml` | each package | Thin caller (copied from the template). |
 
+Both engines install a specific pinned commit of the dev version of fledge (`cynkra/fledge@<sha>`, via `pak`), not CRAN and not tracking `HEAD`. See Known risks for what that means and how to bump it.
+
 ## One-time setup (org admin)
 
 These steps require organization-owner access and are not done by the workflow files.
@@ -114,3 +116,4 @@ Use non-CRAN packages where Joe is the maintainer, so a dev bump cannot affect a
 - NEWS quality depends on commit-message content, unchanged from current local fledge use.
 - Recreating a PR for new commits discards any prior approval, by design.
 - Scheduled workflows are disabled after 60 days of repo inactivity.
+- The dev version of fledge is pinned to a fixed commit (currently `cynkra/fledge@9453c2b`, 2026-07-02, r-universe `0.1.99.9060`) in the `Install fledge (dev)` step of both `fledge-bump.yaml` and `fledge-tag-on-merge.yaml`. It does not update itself: a fix or messaging improvement on `cynkra/fledge` main only takes effect once someone deliberately edits the pinned SHA in both files, the same way the `@v1` engine tag is bumped deliberately rather than tracking `main`. Test a new pin against one package first (point its caller workflows at the branch) before moving `v1`.
