@@ -7,7 +7,10 @@
 #   * last tag is a RELEASE version (X.Y.Z, 3 components)   -> open an auto-merge PR from the
 #     `fledge-bump` branch, assigned to the codeowner; the tag is created on main after merge
 #     by the companion fledge-tag-on-merge workflow.
-# Does nothing when there are no tags or no commits since the last tag.
+# Does nothing when there are no tags or no commits since the last tag, or when a
+# CRAN-SUBMISSION (or legacy CRAN-RELEASE) file is committed on the default branch:
+# devtools::submit_cran() creates it and usethis::use_github_release() deletes it on
+# acceptance, so while it exists the submitted version must not be bumped.
 
 name: fledge-bump
 
@@ -65,6 +68,17 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # A committed CRAN-SUBMISSION (or legacy CRAN-RELEASE) file marks a release that
+          # is awaiting CRAN. devtools::submit_cran() creates it and
+          # usethis::use_github_release() removes it on acceptance, so while it exists
+          # the version in DESCRIPTION must stay as submitted.
+          for f in CRAN-SUBMISSION CRAN-RELEASE; do
+            if [ -f "$f" ]; then
+              echo "::notice::${f} is present on ${default_branch}; a CRAN submission is pending, so the version bump is on hold until it is removed (usethis::use_github_release() deletes it)."
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
           ver=${last_tag#v}
           dots=$(printf '%s' "$ver" | tr -cd '.' | wc -c | tr -d ' ')
           if [ "$dots" -ge 3 ]; then kind=dev; else kind=release; fi
