@@ -18,6 +18,10 @@ If there are commits, it classifies the most recent tag and acts:
 If a `fledge-bump` PR is still open the next day and new commits have landed on `main`, the PR is closed and recreated to include them.
 If no new commits have landed, the open PR is left untouched so its approval and pending auto-merge survive.
 
+If a `CRAN-SUBMISSION` (or legacy `CRAN-RELEASE`) file is committed on `main`, the run exits with a notice and nothing is bumped, whichever path applies.
+`devtools::submit_cran()` creates the file and `usethis::use_github_release()` deletes it once CRAN accepts, so the dev cycle starts on the first nightly run after the deletion is pushed.
+Commit the file with the release so the hold takes effect, and keep the version in `DESCRIPTION` at the submitted version while it exists.
+
 ## Components
 
 | File | Repo | Role |
@@ -116,4 +120,5 @@ Use non-CRAN packages where Joe is the maintainer, so a dev bump cannot affect a
 - NEWS quality depends on commit-message content, unchanged from current local fledge use.
 - Recreating a PR for new commits discards any prior approval, by design.
 - Scheduled workflows are disabled after 60 days of repo inactivity.
+- A `CRAN-SUBMISSION` file that is never deleted holds the bump indefinitely; the nightly run logs a notice each day, so check for a stale file if a package stops bumping after a release.
 - The dev version of fledge is pinned to a fixed commit (currently `cynkra/fledge@9453c2b`, 2026-07-02, r-universe `0.1.99.9060`) in the `Install fledge (dev)` step of both `fledge-bump.yaml` and `fledge-tag-on-merge.yaml`. It does not update itself: a fix or messaging improvement on `cynkra/fledge` main only takes effect once someone deliberately edits the pinned SHA in both files, the same way the `@v1` engine tag is bumped deliberately rather than tracking `main`. Test a new pin against one package first (point its caller workflows at the branch) before moving `v1`.
