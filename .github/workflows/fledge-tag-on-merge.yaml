@@ -25,13 +25,13 @@ jobs:
     steps:
       - name: Generate app token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.FLEDGE_APP_ID }}
           private-key: ${{ secrets.FLEDGE_APP_PRIVATE_KEY }}
 
       - name: Checkout merged base branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 0
@@ -39,7 +39,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup R
-        uses: r-lib/actions/setup-r@v2
+        uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           r-version: ${{ inputs.r-version }}
           use-public-rspm: true
