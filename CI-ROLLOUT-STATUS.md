@@ -1,56 +1,44 @@
 # CI standardization rollout: status and remaining work
 
-Snapshot as of 2026-06-22.
+Snapshot as of 2026-10-05 (previous snapshot 2026-06-22).
 Tracks the migration of every active R package onto the centrally-managed reusable workflows (`poissonconsulting/.github@v1`), with all caller files using the `.yaml` extension.
 See `CI-SYSTEM.md` for the system design and `tools/sync-ci.sh` for the generator.
 
 ## State
 
-All 72 fledge-managed packages have been standardized: each has an `f-ci` pull request that replaces its ad-hoc workflows with thin `.yaml` callers.
-`v1` points at the permissions-fix merge commit and is verified green; there are no `startup_failure` runs across the fleet.
+103 packages call `R-CMD-check.yaml@v1`.
+No package calls the four CI `.yml` forwarding shims (`R-CMD-check.yml`, `test-coverage.yml`, `pkgdown.yml`, `check-no-suggests.yml`), so they have been deleted.
+The two fledge `.yml` shims remain because three packages still call them (below).
 
-A permissions-escalation bug (reusables declared `read-all`, shims `write-all`, exceeding the callers' `contents: read` grant) had been failing all CI at startup fleet-wide.
-It was fixed by giving every reusable and shim the minimal permissions matching its caller.
-Do not reintroduce `read-all` or `write-all` in any reusable or shim; a called workflow that requests more than its caller grants is rejected before any job runs.
+Do not reintroduce `read-all` or `write-all` in any reusable workflow; a called workflow that requests more than its caller grants is rejected before any job runs.
+This permissions-escalation bug failed all CI at startup fleet-wide during the June rollout.
 
-## Done
+## Done since 2026-06-22
 
-- 35 stale PRs from the previous flat rollout (`f-standardize-actions`) closed.
-- 30 joethorley-owned `f-ci` PRs merged to `main`.
-- Four `check-no-suggests` Suggests-leaks fixed and merged: `batchr`, `chk`, `mcmcderive`, `universals`.
+- No `f-ci` PRs remain open except the two below.
+- `dttr2` and `ssdsims` migrated to `.yaml` callers.
+- CI `.yml` shims and the obsolete `tools/set-fledge-branch-protection.sh` (classic branch protection, removed org-wide 2026-07-17) deleted.
 
 ## Remaining work
 
-### 1. Merge the open `f-ci` PRs
+### 1. Finish the `.yaml` migration
 
-- 20 joethorley-owned PRs remain open, blocked by the pre-existing test failures listed below.
-- 20 teammate-owned PRs await review (`@aylapear` 11, `@sebdalgarno` 6, `@nehill197` 3).
+- Open `f-ci` PRs assigned to @nehill197 since 2026-07-14: `bisonpictools#63` and `bisonpicsuite#35`.
+  Both packages still call the fledge `.yml` shims until these merge.
+- `hmstimer` still has `fledge-bump.yml` and `fledge-tag-on-merge.yml` callers.
+- `ghpois` pins its fledge caller to `@main` instead of `@v1`.
+- Once no caller references `fledge-bump.yml` or `fledge-tag-on-merge.yml`, delete those two shims.
 
-### 2. Pre-existing test failures surfaced by the new CI
+### 2. Packages failing R-CMD-check on the default branch
 
-These are package-level issues, not rollout defects.
-The standardized CI exposed them; it did not cause them.
+23 of the 103 packages failed their most recent push-triggered R-CMD-check run on the default branch (three more have no such run: `aquarius2r2`, `harvestapi`, `rescale`).
+These are package-level issues, not CI defects, but a fleet this red masks regressions from reusable-workflow changes.
 
-- Live network/API tests run unguarded in CI (need `skip_on_ci()`, `skip_if_offline()`, or mocking): `aquarius2r2`, `aquariusapi`, `arcgisevr`, `baserowapi`, `harvestapi`, `mcmcdata`, `poisaws2`, `poisslack`, `poisspatial`, `readwriteaws`, `fishobspgr`, `bisonpictools`, `rpdo` (download test).
-- `pkgdown` plus check failures: `poispkgs`, `shinylcrstranding`, `ssdsuite`, `ssdvignettes`.
-- fledge plus check failure: `subreport`.
-- Genuine code/test bugs that also fail the full R CMD check: `flobr` (a `Path extension must match '.pdf'` assertion), `rpdo` (a `library(ggplot2)` call in a roxygen `@examples` block).
+- Since June/July: `bisonpicsuite`, `bisonpictools`, `evrfish`, `bbousims`, `curtisquadata`, `fishobspgr`, `hobolink`, `shinygis`, `shinylcrstranding`, `tscbh`, `aquariusapi`, `baserowapi`, `dbflobr`, `mcmcdata`, `poisaws2`, `poisslack`, `ssdsuite`, `subreport`, `checkr`, `arcgisevr`, `readwriteaws`.
+- Recent: `tmbr` (2026-09-01), `poispkgs` (2026-10-05).
 
-### 3. `check-no-suggests` failures that are not Suggests-leaks
-
-- `nlist`: pak reports `Build process failed` while installing under the no-suggests profile; a dependency-resolution problem, not a missing test guard.
-- `dbflobr`: pak reports a dependency conflict and cannot install its hard dependency `flobr` under the no-suggests profile.
-- These two need their dependency trees untangled; the reusable itself is sound (`batchr`, `chk`, `mcmcderive`, `universals` install and test cleanly under the same profile).
-
-### 4. Finish the `.yaml` migration
-
-- Migrate the fledge callers fleet-wide from `.yml` to `.yaml`.
-  This is not done by `sync-ci.sh` (it preserves existing fledge callers under either extension) nor by `rollout-fledge-automation.sh` (it skips packages that already have a fledge caller); a dedicated step is needed.
-- Migrate `dttr2` and `ssdsims`, which were merged earlier with legacy `.yml` callers.
-- Once every caller across all packages (CI and fledge) references `.yaml@v1`, delete the six `.yml` forwarding shims in `.github/.github/workflows/` and re-tag `v1`.
-  Do not delete the shims before then.
+Known causes from the June snapshot still apply to many of these: unguarded live network/API tests (need `skip_on_ci()`, `skip_if_offline()`, or mocking), and `check-no-suggests` dependency-resolution failures in `dbflobr`.
 
 ## Notes
 
-- `git push --force origin v1` moves the tag; it affects every package's next CI run, so keep `v1` on a commit that is on `main`.
-- The four phase-1 PRs (`embr`, `chk`, `bboutools`, `fwatlasbc`) were created before the permissions fix; their checks were re-run so they resolve against the fixed `v1`.
+- Releasing a reusable-workflow change goes through `tools/promote-v1.sh`, which canary-tests `main` before moving `v1`; do not move `v1` by hand.

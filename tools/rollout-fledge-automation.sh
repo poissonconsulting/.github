@@ -39,7 +39,7 @@ NAMES=("$@")
 repo_root=$(git rev-parse --show-toplevel)
 
 # Repos to exclude even when fledge-managed (sandboxes and templates); shared with
-# tools/sync-ci.sh and tools/set-fledge-branch-protection.sh.
+# tools/sync-ci.sh.
 source "$repo_root/tools/excluded-repos.sh"
 EXCLUDE="$ROLLOUT_EXCLUDE"
 

@@ -64,9 +64,8 @@ Auto-merge is already enabled on the package repos, so nothing more is required.
 The "Always" bypass enables the dev path's direct push but does not defeat the release path:
 a queued `gh pr merge --auto` still waits for the code-owner review (verified in Stage 2b).
 
-Note: `tools/set-fledge-branch-protection.sh` targets per-repo classic branch protection,
-which turned out to be redundant here because the org ruleset is the active control.
-Keep it only for repos that rely on classic protection instead of the ruleset.
+Note: an earlier `tools/set-fledge-branch-protection.sh` targeted per-repo classic branch protection.
+It was removed after classic protection was removed org-wide on 2026-07-17; the org rulesets are the only control.
 
 Gate: nothing runs yet; safe to pause here indefinitely.
 

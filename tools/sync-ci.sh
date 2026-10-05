@@ -58,7 +58,7 @@ CANARY_REF="${CANARY_REF:-main}"
 is_canary() { sed 's/#.*//' "$CANARIES" | awk 'NF{print $1}' | grep -qxF -- "$1"; }
 
 # Repos to exclude even when fledge-managed (sandboxes and templates); shared with
-# tools/rollout-fledge-automation.sh and tools/set-fledge-branch-protection.sh.
+# tools/rollout-fledge-automation.sh.
 source "$repo_root/tools/excluded-repos.sh"
 EXCLUDE="$SYNC_CI_EXCLUDE"
 
