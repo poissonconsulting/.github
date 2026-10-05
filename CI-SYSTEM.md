@@ -109,4 +109,6 @@ The one-time go-live sequence and rollout status are recorded in `GO-LIVE.md` an
 
 - Moving `v1` also moves the fledge callers' pin, but the fledge reusable workflows are unchanged, so they keep working.
 - A genuine package failure (e.g. tests needing live API credentials) stays red regardless of tier; that is a real bug to fix in the package, not a CI issue.
+- Third-party actions in the reusable workflows are pinned to exact release tags (`vX.Y.Z`, not floating majors such as `v4`), so upstream changes arrive only through a deliberate bump.
+  Dependabot (`.github/dependabot.yml`) opens a grouped monthly PR that bumps the tags.
 - The reusable-workflow matrix is built with `fromJSON(needs.matrix.outputs.config)`, a standard supported pattern.

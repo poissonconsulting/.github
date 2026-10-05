@@ -1,0 +1,14 @@
+# Keeps the third-party actions used by the reusable workflows current.
+# Actions are pinned to exact release tags (vX.Y.Z); Dependabot bumps them.
+# Merging an update changes main only: it reaches packages when the v1 tag is moved.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"
