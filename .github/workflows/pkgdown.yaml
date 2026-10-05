@@ -3,6 +3,7 @@
 # cmdstan=true installs the CmdStan toolchain so articles that fit Stan models via
 # cmdstanr (e.g. through smbr2) can compile and sample during the site build.
 # cmdstanr itself must arrive through the package's dependency tree.
+# deploy=false builds without deploying on any event (used by the canary callers).
 
 name: pkgdown
 
@@ -15,6 +16,9 @@ on:
       private:
         type: boolean
         default: false
+      deploy:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -23,7 +27,7 @@ jobs:
   pkgdown:
     runs-on: ubuntu-latest
     concurrency:
-      group: pkgdown-${{ github.event_name != 'pull_request' || github.run_id }}
+      group: pkgdown-${{ (github.event_name != 'pull_request' && inputs.deploy) || github.run_id }}
     env:
       GITHUB_PAT: ${{ inputs.private && secrets.PRIVATE_ACTIONS_PAT || secrets.GITHUB_TOKEN }}
     permissions:
@@ -54,7 +58,7 @@ jobs:
         shell: Rscript {0}
 
       - name: Deploy to GitHub pages 🚀
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && inputs.deploy
         uses: JamesIves/github-pages-deploy-action@v4.9.0
         with:
           clean: false

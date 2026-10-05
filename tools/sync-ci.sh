@@ -18,6 +18,8 @@
 #             -> installs the CmdStan toolchain in check, coverage, and pkgdown builds
 #   tex       auto-detected from repo contents (PDF vignettes / PDF-rendering R code) -> installs TinyTeX
 #   cran      active on CRAN (independent of tier; archived packages excluded) -> adds check-no-suggests caller + vendored rhub.yaml
+#   canary    listed in tools/canary-packages.txt -> adds a dispatch-only canary.yaml caller pinned to
+#             @CANARY_REF (default main), run by tools/promote-v1.sh before v1 moves
 #
 # Before rolling out, a pre-flight flags important-tier candidates: packages whose deployed
 # R-CMD-check caller says tier: important but which are neither in the registry nor active on
@@ -51,6 +53,9 @@ KEEP_PRESERVE="paper.yaml slack-check-package.yaml"
 repo_root=$(git rev-parse --show-toplevel)
 REGISTRY="$repo_root/tools/package-tiers.tsv"
 RHUB_TPL="$repo_root/workflow-templates/rhub.yaml"
+CANARIES="$repo_root/tools/canary-packages.txt"
+CANARY_REF="${CANARY_REF:-main}"
+is_canary() { sed 's/#.*//' "$CANARIES" | awk 'NF{print $1}' | grep -qxF -- "$1"; }
 
 # Repos to exclude even when fledge-managed (sandboxes and templates); shared with
 # tools/rollout-fledge-automation.sh and tools/set-fledge-branch-protection.sh.
@@ -239,6 +244,52 @@ YAML
     # from the canonical template rather than invoked as a reusable caller. CRAN tier only.
     cp "$RHUB_TPL" "$wf/rhub.yaml"
   fi
+  # Canary packages also get a dispatch-only caller that runs the reusables at @$CANARY_REF
+  # (main), so tools/promote-v1.sh can exercise main here before moving v1. It never deploys.
+  if [ "$canary" = true ]; then
+    cat > "$wf/canary.yaml" <<YAML
+name: canary
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  R-CMD-check:
+    uses: $ORG/.github/.github/workflows/R-CMD-check.yaml@$CANARY_REF
+    with:
+      tier: $tier
+      jags: $jags
+      cmdstan: $cmdstan
+      tex: $tex
+      private: $private
+    secrets: inherit
+  test-coverage:
+    uses: $ORG/.github/.github/workflows/test-coverage.yaml@$CANARY_REF
+    with:
+      cmdstan: $cmdstan
+      tex: $tex
+      private: $private
+    secrets: inherit
+  pkgdown:
+    permissions:
+      contents: write
+    uses: $ORG/.github/.github/workflows/pkgdown.yaml@$CANARY_REF
+    with:
+      cmdstan: $cmdstan
+      private: $private
+      deploy: false
+    secrets: inherit
+YAML
+    if [ "$cran" = true ]; then
+      cat >> "$wf/canary.yaml" <<YAML
+  check-no-suggests:
+    uses: $ORG/.github/.github/workflows/check-no-suggests.yaml@$CANARY_REF
+    with:
+      private: $private
+    secrets: inherit
+YAML
+    fi
+  fi
 }
 
 # ---- --close-old: retire the previous flat rollout -------------------------------------------
@@ -351,6 +402,7 @@ while IFS= read -r repo <&3; do
   # tex auto-detected from repo contents (PDF vignettes or PDF-rendering R code).
   default=$(gh_try gh api "repos/$ORG/$repo" --jq '.default_branch' </dev/null || echo main)
   tex=$(detect_tex "$repo" "$default")
+  canary=false; is_canary "$repo" && canary=true
 
   owner=$(printf '%s\n' "$(raw "$repo" .github/CODEOWNERS)" | grep -E '^\*[[:space:]]' | head -n1 | grep -oE '@[A-Za-z0-9_-]+' | head -n1 | sed 's/@//' || true)
   route=normal; [ "$owner" != joethorley ] && route="review -> @${owner:-???}"
@@ -359,7 +411,7 @@ while IFS= read -r repo <&3; do
   [ "$private" = true ] && priv_n=$((priv_n+1)); [ "$jags" = true ] && jags_n=$((jags_n+1)); [ "$cmdstan" = true ] && cmdstan_n=$((cmdstan_n+1)); [ "$tex" = true ] && tex_n=$((tex_n+1)); act=$((act+1))
 
   if [ "$MODE" != apply ]; then
-    printf 'TODO  %-22s tier=%-11s cran=%-5s private=%-5s jags=%-5s cmdstan=%-5s tex=%-5s route=%s\n' "$repo" "$tier" "$cran" "$private" "$jags" "$cmdstan" "$tex" "$route"
+    printf 'TODO  %-22s tier=%-11s cran=%-5s private=%-5s jags=%-5s cmdstan=%-5s tex=%-5s canary=%-5s route=%s\n' "$repo" "$tier" "$cran" "$private" "$jags" "$cmdstan" "$tex" "$canary" "$route"
     continue
   fi
 
@@ -381,7 +433,7 @@ while IFS= read -r repo <&3; do
     fi
   fi
 
-  echo "APPLY $repo (tier=$tier private=$private jags=$jags cmdstan=$cmdstan tex=$tex route=$route)"
+  echo "APPLY $repo (tier=$tier private=$private jags=$jags cmdstan=$cmdstan tex=$tex canary=$canary route=$route)"
   work=$(mktemp -d)
   if (
     set -e
@@ -407,7 +459,7 @@ migrating any fledge callers to the current .yaml templates.
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
     git push -q -u --force origin "$BRANCH"
-    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests'); fledge callers migrated to the .yaml templates where present."
+    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests')$([ "$canary" = true ] && echo ', canary'); fledge callers migrated to the .yaml templates where present."
     default=$(gh api "repos/$ORG/$repo" --jq '.default_branch')
     if [ "$owner" = joethorley ]; then
       gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \

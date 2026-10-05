@@ -11,6 +11,7 @@ Day-to-day use:
 - `tools/sync-ci.sh` (dry run) classifies every package and shows the planned action.
 - `tools/sync-ci.sh --apply [pkg ...]` renders the callers and opens routed PRs.
 - `tools/package-tiers.tsv` is the tier registry; list a package there only to promote it to `important` or force a tier.
+- `tools/promote-v1.sh --apply` releases what is on `main` to every package by moving `v1`, after `actionlint` and the canary packages (`tools/canary-packages.txt`) pass.
 
 To promote a package to `important`, or to keep a manually promoted one important, run `--apply` from a real terminal: a pre-flight prompts before it would otherwise downgrade such a package.
 

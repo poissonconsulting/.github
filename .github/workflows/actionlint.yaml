@@ -1,0 +1,26 @@
+# Lints this repo's reusable workflows and the caller templates (with shellcheck on run:
+# blocks). tools/promote-v1.sh requires this check to pass on a commit before moving v1.
+
+name: actionlint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Download actionlint
+        run: bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+
+      - name: Run actionlint
+        run: |
+          ./actionlint -color
+          ./actionlint -color workflow-templates/*.yaml
