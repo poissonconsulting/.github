@@ -41,7 +41,7 @@ To change the canary set, edit `tools/canary-packages.txt` and run `tools/sync-c
 Tooling:
 
 - `tools/package-tiers.tsv` — the tier registry (source of truth for `tier`).
-- `tools/excluded-repos.sh` — shared exclude registry (sandboxes/templates), sourced by `sync-ci.sh`, `rollout-fledge-automation.sh`, and `set-fledge-branch-protection.sh`.
+- `tools/excluded-repos.sh` — shared exclude registry (sandboxes/templates), sourced by `sync-ci.sh` and `rollout-fledge-automation.sh`.
 - `tools/sync-ci.sh` — renders callers from the registry + auto-detection and opens routed PRs.
 - `tools/canary-packages.txt` — the canary packages that receive a `canary.yaml` caller.
 - `tools/promote-v1.sh` — gates and performs the move of `v1` to `main`.
