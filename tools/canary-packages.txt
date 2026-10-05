@@ -1,0 +1,8 @@
+# Canary packages for tools/promote-v1.sh, one per line (# comments).
+# Each carries a dispatch-only canary.yaml caller (rendered by tools/sync-ci.sh) that runs the
+# reusable workflows at @main, so a change on main is exercised before v1 moves.
+# Together they cover every classification input; keep them green and owned by the operator.
+chk         # cran tier: full OS/R matrix + check-no-suggests
+embr        # important tier + jags + cmdstan
+poisreport  # important tier + tex + private
+poisplot    # unimportant tier
