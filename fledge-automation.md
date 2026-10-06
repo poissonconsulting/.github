@@ -45,6 +45,7 @@ Create an org-owned GitHub App (suggested name `poisson-fledge-bot`) with reposi
 
 - Contents: read and write
 - Pull requests: read and write
+- Actions: read and write (used only by `fledge-keepalive`, below)
 - Metadata: read
 
 The default `GITHUB_TOKEN` is deliberately not used: events it creates do not trigger other workflows, so a tag it pushed would never start `pkgdown` / `R-CMD-check`, and it cannot bypass branch protection.
@@ -119,6 +120,9 @@ Use non-CRAN packages where Joe is the maintainer, so a dev bump cannot affect a
 - fledge is built for interactive use; running `bump_version()` / `tag_version()` headless must be validated on the first dry run before rollout.
 - NEWS quality depends on commit-message content, unchanged from current local fledge use.
 - Recreating a PR for new commits discards any prior approval, by design.
-- Scheduled workflows are disabled after 60 days of repo inactivity.
+- GitHub disables a repo's scheduled workflows after 60 days without repository activity, and a quiet package's fledge-bump pushes nothing, so it switches itself off (state `disabled_inactivity`) and stays off even after new commits land.
+  `.github/workflows/fledge-keepalive.yaml` in this repo runs at 06:30 UTC, re-enables every `disabled_inactivity` fledge-bump across the org (leaving `disabled_manually` ones alone), and re-enables itself so it cannot lapse; its run summary lists any repos it re-enabled.
+  Dispatch it with `dry-run: true` to report without changing anything.
+  On 2026-10-06, 49 of 96 packages had been disabled this way since mid-September and were re-enabled by hand.
 - A `CRAN-SUBMISSION` file that is never deleted holds the bump indefinitely; the nightly run logs a notice each day, so check for a stale file if a package stops bumping after a release.
 - The dev version of fledge is pinned to a fixed commit (currently `cynkra/fledge@9453c2b`, 2026-07-02, r-universe `0.1.99.9060`) in the `Install fledge (dev)` step of both `fledge-bump.yaml` and `fledge-tag-on-merge.yaml`. It does not update itself: a fix or messaging improvement on `cynkra/fledge` main only takes effect once someone deliberately edits the pinned SHA in both files, the same way the `@v1` engine tag is bumped deliberately rather than tracking `main`. Merge a new pin to `main` and release it with `tools/promote-v1.sh`, which runs the canary packages first; note the canaries exercise the CI reusables, not the fledge ones, so after promoting a fledge change check the next nightly `fledge-bump` runs across the fleet.

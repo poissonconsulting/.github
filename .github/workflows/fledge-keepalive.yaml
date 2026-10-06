@@ -1,0 +1,80 @@
+# Re-enables package fledge-bump workflows that GitHub has disabled for inactivity.
+#
+# GitHub disables a repo's scheduled workflows after 60 days without repository activity, and
+# a quiet package's nightly fledge-bump pushes nothing, so it eventually switches itself off
+# and stays off (silently) even after new commits arrive. This runs before the 07:00 UTC
+# fledge-bump, finds every non-archived repo whose fledge-bump is disabled_inactivity, and
+# re-enables it. Manually disabled workflows (disabled_manually) are left alone.
+#
+# It also re-enables itself each run so that this repo going quiet cannot disable it.
+# Runs from main directly (it is not a reusable workflow), so it is not gated by v1.
+# Requires the poisson-fledge-bot App to have the Actions: read and write permission.
+
+name: fledge-keepalive
+
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Report disabled fledge-bump workflows without re-enabling them.
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v3.2.0
+        with:
+          app-id: ${{ secrets.FLEDGE_APP_ID }}
+          private-key: ${{ secrets.FLEDGE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Keep this workflow enabled
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/fledge-keepalive.yaml/enable"
+
+      - name: Re-enable disabled fledge-bump workflows
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          DRY_RUN: ${{ inputs.dry-run || false }}
+        run: |
+          set -euo pipefail
+          checked=0; reenabled=""; failed=""
+          repos=$(gh api --paginate /installation/repositories \
+                    --jq '.repositories[] | select(.archived | not) | .full_name')
+          for repo in $repos; do
+            wf=$(gh api "repos/${repo}/actions/workflows" --paginate \
+                   --jq '.workflows[] | select(.name == "fledge-bump") | "\(.id) \(.state)"' \
+                   2>/dev/null | head -n1 || true)
+            [ -n "$wf" ] || continue
+            checked=$((checked + 1))
+            read -r id state <<< "$wf"
+            [ "$state" = disabled_inactivity ] || continue
+            if [ "$DRY_RUN" = true ]; then
+              echo "::notice::${repo}: fledge-bump is disabled_inactivity (dry run, not re-enabled)"
+              reenabled="${reenabled} ${repo}"
+            elif gh api -X PUT "repos/${repo}/actions/workflows/${id}/enable" >/dev/null; then
+              echo "::warning::${repo}: re-enabled fledge-bump (was disabled_inactivity)"
+              reenabled="${reenabled} ${repo}"
+            else
+              echo "::error::${repo}: could not re-enable fledge-bump"
+              failed="${failed} ${repo}"
+            fi
+          done
+          {
+            echo "### fledge-keepalive"
+            echo
+            echo "Repos with a fledge-bump workflow: ${checked}"
+            echo "$([ "$DRY_RUN" = true ] && echo 'Disabled (dry run)' || echo 'Re-enabled'): ${reenabled:- none}"
+            echo "Failed: ${failed:- none}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ -z "$failed" ]
