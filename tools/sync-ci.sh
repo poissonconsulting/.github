@@ -9,7 +9,8 @@
 # paper.yaml / slack-check-package.yaml workflows are preserved; fledge callers are removed
 # (fledge runs centrally from poissonconsulting/fledgerunner); all other pre-existing
 # workflows are replaced. Opens one routed PR (normal PR for joethorley-owned
-# repos; issue + ready-for-review PR assigned to the owner with review requested otherwise).
+# repos; otherwise an issue + draft PR assigned to the owner, who marks it ready once checks pass,
+# per the org's issue-first + draft-PR rule for repos the operator does not own).
 #
 # Classification per package:
 #   tier      registry override > active-on-CRAN > unimportant (default)
@@ -406,7 +407,7 @@ while IFS= read -r repo <&3; do
   canary=false; is_canary "$repo" && canary=true
 
   owner=$(printf '%s\n' "$(raw "$repo" .github/CODEOWNERS)" | grep -E '^\*[[:space:]]' | head -n1 | grep -oE '@[A-Za-z0-9_-]+' | head -n1 | sed 's/@//' || true)
-  route=normal; [ "$owner" != joethorley ] && route="review -> @${owner:-???}"
+  route=normal; [ "$owner" != joethorley ] && route="draft -> @${owner:-???}"
 
   case "$tier" in cran) cran_n=$((cran_n+1));; important) imp_n=$((imp_n+1));; *) unimp_n=$((unimp_n+1));; esac
   [ "$private" = true ] && priv_n=$((priv_n+1)); [ "$jags" = true ] && jags_n=$((jags_n+1)); [ "$cmdstan" = true ] && cmdstan_n=$((cmdstan_n+1)); [ "$tex" = true ] && tex_n=$((tex_n+1)); act=$((act+1))
@@ -463,10 +464,12 @@ Co-Authored-By: $CO_AUTHOR}"
     else
       iss=$(gh issue create --repo "$ORG/$repo" --title "Standardize CI onto reusable workflows" --body "$body" 2>/dev/null | grep -oE '[0-9]+$' || true)
       gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
-        --title "Standardize CI (tier: $tier)" ${owner:+--assignee "$owner" --reviewer "$owner"} \
+        --title "Standardize CI (tier: $tier)" --draft ${owner:+--assignee "$owner"} \
         --body "${iss:+Closes #$iss.
 
-}$body" >/dev/null
+}$body
+
+Opened as a draft: please mark it ready for review once its checks pass, then merge." >/dev/null
     fi
   ); then echo "  done $repo"; else echo "FAIL  $repo (re-run to retry)"; failed="$failed $repo"; fi
   rm -rf "$work"
