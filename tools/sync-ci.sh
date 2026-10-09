@@ -5,9 +5,10 @@
 # Per fledge-managed package it renders thin caller workflows that invoke the reusable
 # workflows in poissonconsulting/.github (R-CMD-check, test-coverage, pkgdown, and, for CRAN
 # packages, check-no-suggests). CRAN packages also get the vendored R-hub workflow (rhub.yaml,
-# dispatch-triggered and r-hub-owned, so distributed as a template not a caller). The fledge
-# callers and the bespoke paper.yaml / slack-check-package.yaml workflows are preserved; all
-# other pre-existing workflows are replaced. Opens one routed PR (normal PR for joethorley-owned
+# dispatch-triggered and r-hub-owned, so distributed as a template not a caller). The bespoke
+# paper.yaml / slack-check-package.yaml workflows are preserved; fledge callers are removed
+# (fledge runs centrally from poissonconsulting/fledgerunner); all other pre-existing
+# workflows are replaced. Opens one routed PR (normal PR for joethorley-owned
 # repos; issue + ready-for-review PR assigned to the owner with review requested otherwise).
 #
 # Classification per package:
@@ -47,9 +48,6 @@ OLD_BRANCH=f-standardize-actions
 ENGINE_REF="${ENGINE_REF:-v1}"
 # Optional Co-Authored-By trailer for the generated commits (e.g. when an AI assistant runs the tool).
 CO_AUTHOR="${CO_AUTHOR:-}"
-# Fledge callers are migrated, not preserved: a package with a fledge caller under either
-# extension gets the current .yaml templates and any .yml copy is dropped.
-KEEP_FLEDGE="fledge-bump.yaml fledge-tag-on-merge.yaml fledge-bump.yml fledge-tag-on-merge.yml"
 # Bespoke per-package workflows preserved across standardization (not replaced by a
 # reusable caller): JOSS paper build and the Slack package-check notifier.
 KEEP_PRESERVE="paper.yaml slack-check-package.yaml"
@@ -444,25 +442,20 @@ while IFS= read -r repo <&3; do
     cd "$work/$repo"
     git checkout -b "$BRANCH" -q
     kp="$work/.keep"; mkdir -p "$kp"
-    for k in $KEEP_FLEDGE $KEEP_PRESERVE; do [ -f ".github/workflows/$k" ] && cp ".github/workflows/$k" "$kp/"; done
+    for k in $KEEP_PRESERVE; do [ -f ".github/workflows/$k" ] && cp ".github/workflows/$k" "$kp/"; done
     rm -rf .github/workflows && mkdir -p .github/workflows
     render_callers .github/workflows
     for k in $KEEP_PRESERVE; do [ -f "$kp/$k" ] && cp "$kp/$k" .github/workflows/; done
-    # Migrate fledge callers: any package that had one (either extension) gets the
-    # current .yaml templates; stale .yml copies are not restored.
-    for f in fledge-bump fledge-tag-on-merge; do
-      { [ -f "$kp/$f.yaml" ] || [ -f "$kp/$f.yml" ]; } && cp "$repo_root/workflow-templates/$f.yaml" .github/workflows/
-    done
     git add -A
     git commit -q -m "Standardize CI via reusable workflows (tier: $tier)
 
 Replace ad hoc workflows with thin callers to the reusable CI in
 $ORG/.github (R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests')$([ "$canary" = true ] && echo ', canary')),
-migrating any fledge callers to the current .yaml templates.${CO_AUTHOR:+
+removing any fledge callers (fledge now runs centrally from $ORG/fledgerunner).${CO_AUTHOR:+
 
 Co-Authored-By: $CO_AUTHOR}"
     git push -q -u --force origin "$BRANCH"
-    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests')$([ "$canary" = true ] && echo ', canary'); fledge callers migrated to the .yaml templates where present."
+    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests')$([ "$canary" = true ] && echo ', canary'); fledge callers removed (fledge now runs centrally from \`$ORG/fledgerunner\`)."
     default=$(gh api "repos/$ORG/$repo" --jq '.default_branch')
     if [ "$owner" = joethorley ]; then
       gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
