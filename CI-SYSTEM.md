@@ -89,7 +89,7 @@ tools/sync-ci.sh --close-old        # close the prior f-standardize-actions PRs/
 ENGINE_REF=branch tools/sync-ci.sh --apply pkgA   # pin callers to a branch instead of @v1
 ```
 
-Routing follows the CODEOWNER: a normal PR when Joe owns the repo, otherwise an issue plus a PR assigned to the owner with review requested.
+Routing follows the CODEOWNER: a normal PR when Joe owns the repo, otherwise an issue plus a draft PR assigned to the owner, who marks it ready once its checks pass (the issue-first + draft-PR rule for repos the operator does not own; GitHub does not allow review requests on drafts, so the owner is assigned instead).
 The tool is dry-run by default, throttled, and isolates per-repo failures so one transient does not abort the batch.
 On `--apply`, if the CI system already has an open PR for a repo (its `f-ci` branch), it closes that PR (and its linked tracking issue) and opens a fresh one, so a re-run always reflects the current classification.
 
