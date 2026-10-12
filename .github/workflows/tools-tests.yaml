@@ -1,0 +1,20 @@
+# Runs the bash unit tests for the tools/ scripts.
+
+name: tools-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Run tool tests
+        run: for t in tools/tests/test-*.sh; do bash "$t"; done

@@ -49,10 +49,10 @@ OLD_BRANCH=f-standardize-actions
 ENGINE_REF="${ENGINE_REF:-v1}"
 # Optional Co-Authored-By trailer for the generated commits (e.g. when an AI assistant runs the tool).
 CO_AUTHOR="${CO_AUTHOR:-}"
-# Bespoke per-package workflows preserved across standardization (not replaced by a
-# reusable caller): JOSS paper build and the Slack package-check notifier.
-KEEP_PRESERVE="paper.yaml slack-check-package.yaml"
 repo_root=$(git rev-parse --show-toplevel)
+# Which managed callers to write, keep or drop; workflows sync-ci does not manage
+# (bookdown.yaml, paper.yaml, slack-check-package.yaml, ...) are never touched.
+source "$repo_root/tools/sync-ci-callers.sh"
 REGISTRY="$repo_root/tools/package-tiers.tsv"
 RHUB_TPL="$repo_root/workflow-templates/rhub.yaml"
 CANARIES="$repo_root/tools/canary-packages.txt"
@@ -442,12 +442,11 @@ while IFS= read -r repo <&3; do
     git clone -q --depth 1 "git@github.com:$ORG/$repo.git" "$work/$repo"
     cd "$work/$repo"
     git checkout -b "$BRANCH" -q
-    kp="$work/.keep"; mkdir -p "$kp"
-    for k in $KEEP_PRESERVE; do [ -f ".github/workflows/$k" ] && cp ".github/workflows/$k" "$kp/"; done
-    rm -rf .github/workflows && mkdir -p .github/workflows
-    render_callers .github/workflows
-    for k in $KEEP_PRESERVE; do [ -f "$kp/$k" ] && cp "$kp/$k" .github/workflows/; done
+    rendered="$work/.rendered"; mkdir -p "$rendered"
+    render_callers "$rendered"
+    sync_workflows .github/workflows "$rendered" "$private" "$cran" "$canary"
     git add -A
+    if git diff --cached --quiet; then touch "$work/.nochange"; exit 0; fi
     git commit -q -m "Standardize CI via reusable workflows (tier: $tier)
 
 Replace ad hoc workflows with thin callers to the reusable CI in
@@ -471,7 +470,9 @@ Co-Authored-By: $CO_AUTHOR}"
 
 Opened as a draft: please mark it ready for review once its checks pass, then merge." >/dev/null
     fi
-  ); then echo "  done $repo"; else echo "FAIL  $repo (re-run to retry)"; failed="$failed $repo"; fi
+  ); then
+    if [ -f "$work/.nochange" ]; then echo "  same $repo (workflows already current; no PR)"; else echo "  done $repo"; fi
+  else echo "FAIL  $repo (re-run to retry)"; failed="$failed $repo"; fi
   rm -rf "$work"
 done 3< <(printf '%s\n' "$PKGS")
 
