@@ -1,124 +1,117 @@
 # fledge version-bump automation
 
-Daily automated fledge dev-version bumping for non-forked, non-archived `poissonconsulting` R packages.
+Nightly automated fledge dev-version bumps for non-forked, non-archived `poissonconsulting` R packages.
+Since October 2026 this runs centrally from the private repository [`poissonconsulting/fledgerunner`](https://github.com/poissonconsulting/fledgerunner), not from workflows inside each package.
+
+## In short (for package maintainers)
+
+**What fledge does:** it keeps each package's development version number and `NEWS.md` up to date automatically.
+Every night it checks for new commits since the last version.
+If there are any, it bumps the dev version (e.g. 0.3.0.9001 to 0.3.0.9002), adds the commit messages to `NEWS.md`, and tags the new version.
+
+**What changed in October 2026:** only *where* that nightly job runs.
+Each package used to carry its own copy of the job (`.github/workflows/fledge-bump.yaml` and `fledge-tag-on-merge.yaml`).
+It now runs from one central place, `poissonconsulting/fledgerunner`, which handles every package.
+A package moves over when the PR removing its two fledge files is merged; the central job takes over from the next night.
+
+**Why:**
+
+1. **The old setup quietly stopped working for about half the packages.** GitHub switches off scheduled jobs in public repos after 60 days without a commit. On 2026-10-06, 49 of 96 packages had stopped getting bumps since mid-September, with no warning. One central job in a private repo does not have this problem.
+2. **Security.** Each package's copy needed the fledge bot's private key, which was readable from every repo in the organisation, and the bot can push straight to `main`. The key now only needs to be available to one private repo.
+3. **One place to check.** Problems show up in one place instead of across ~100 repos.
+
+**What changes for you as a maintainer: almost nothing.**
+
+- Keep committing as usual. Version bumps and `NEWS.md` still update overnight from your commit messages, so clear commit messages still matter.
+- Do not hand-edit `NEWS.md` or the dev version (unchanged).
+- CRAN releases are unchanged: committing the `CRAN-SUBMISSION` file pauses bumps until the release is accepted and the file is removed.
+- After a release you still get a "Start dev cycle" PR to review and merge. The new version tag is now added by the next nightly run rather than straight after the merge.
+- To bump straight away instead of waiting for the night, the job is started from fledgerunner's Actions tab (see [Operations](#operations)). fledgerunner is private; ask a repo admin if you do not have access.
 
 ## What it does
 
-Every day at 07:00 UTC each package checks `main` for commits since the most recent `v*` tag.
-If there are none, it does nothing.
-If there are commits, it classifies the most recent tag and acts:
+Every day at 07:00 UTC, for each fledge-managed package (root `DESCRIPTION` plus a fledge-maintained `NEWS.md`) that no longer carries its own fledge caller workflows:
 
-- Last tag is a **dev** version (`X.Y.Z.9XXX`, four components).
-  `fledge::bump_version("dev")` regenerates `NEWS.md`, bumps `DESCRIPTION`, commits, and tags.
-  The commit and tag are pushed straight to `main`.
-- Last tag is a **release** version (`X.Y.Z`, three components).
-  The same bump is committed onto a `fledge-bump` branch and opened as a pull request assigned to the codeowner, with auto-merge enabled.
-  The version tag is not pushed yet; the companion *fledge-tag-on-merge* workflow tags `main` after the PR merges.
+- No `v*` tag reachable from `HEAD`: nothing happens (fledge is not initialised for that package).
+- A release-path `fledge-bump` PR has merged and its merge commit is untagged: `fledge::tag_version()` tags the merge commit, then the steps below continue in the same run.
+- A `fledge: Bump version to <DESCRIPTION version>` commit exists whose tag never landed (for example GitHub rejected the tag push): that commit is tagged instead of bumping again.
+- No commits since the nearest `v*` tag: nothing happens.
+- `CRAN-SUBMISSION` (or legacy `CRAN-RELEASE`) committed on the default branch: a notice is logged and nothing is bumped.
+- Last tag is a **dev** version (`X.Y.Z.9XXX`): `fledge::bump_version("dev")` regenerates `NEWS.md`, bumps `DESCRIPTION`, commits, tags, and pushes the commit and tag to the default branch together (`git push --atomic`, retried).
+- Last tag is a **release** version (`X.Y.Z`): the bump goes onto a `fledge-bump` branch and is opened as a "Start dev cycle" PR requesting review from the CODEOWNERS owner, with auto-merge armed. An open PR is left alone if `main` has not moved, and closed and recreated if it has.
 
-If a `fledge-bump` PR is still open the next day and new commits have landed on `main`, the PR is closed and recreated to include them.
-If no new commits have landed, the open PR is left untouched so its approval and pending auto-merge survive.
+The bumps are pushed by the `poisson-fledge-bot` GitHub App, so they trigger the package's own CI (R-CMD-check, pkgdown, test-coverage) like any other push.
 
-If a `CRAN-SUBMISSION` (or legacy `CRAN-RELEASE`) file is committed on `main`, the run exits with a notice and nothing is bumped, whichever path applies.
-`devtools::submit_cran()` creates the file and `usethis::use_github_release()` deletes it once CRAN accepts, so the dev cycle starts on the first nightly run after the deletion is pushed.
-Commit the file with the release so the hold takes effect, and keep the version in `DESCRIPTION` at the submitted version while it exists.
+## Where it runs
 
-## Components
+| Path in `poissonconsulting/fledgerunner` | Role |
+| --- | --- |
+| `.github/workflows/fledge.yaml` | Nightly schedule and manual dispatch. A `plan` job selects packages; a matrix `bump` job runs one package per job with an App token scoped to that package. |
+| `tools/fledge-targets.sh` | Selects packages: fledge-managed, not a fork, not excluded, no own fledge caller, and with commits since the tag for its `DESCRIPTION` version (or no such tag). |
+| `tools/fledge-detect.sh`, `tools/fledge-classify.sh` | Decide per package: tag, dev bump, release PR, hold, or nothing. Unit-tested in `tools/tests/`. |
+| `.github/actions/fledge-run/action.yml` | Runs fledge for one checked-out package. |
+| `config/fledge-exclude.txt` | Repositories never processed (sandboxes and templates). |
 
-| File | Repo | Role |
-| --- | --- | --- |
-| `.github/workflows/fledge-bump.yaml` | `poissonconsulting/.github` | Reusable engine (bump + classify + PR). A `.yml` forwarding shim aliases the old path during migration. |
-| `.github/workflows/fledge-tag-on-merge.yaml` | `poissonconsulting/.github` | Reusable engine (tag on merge). A `.yml` forwarding shim aliases the old path during migration. |
-| `workflow-templates/fledge-bump.yaml` | `poissonconsulting/.github` | Per-package caller (schedule + dispatch). |
-| `workflow-templates/fledge-tag-on-merge.yaml` | `poissonconsulting/.github` | Per-package caller (PR closed). |
-| `.github/workflows/fledge-bump.yaml` | each package | Thin caller (copied from the template). |
-| `.github/workflows/fledge-tag-on-merge.yaml` | each package | Thin caller (copied from the template). |
+fledgerunner is private because its logs name private packages and echo commit messages.
+Forks are always skipped: a fork's `main` stays a clean mirror of upstream.
 
-Both engines install a specific pinned commit of the dev version of fledge (`cynkra/fledge@<sha>`, via `pak`), not CRAN and not tracking `HEAD`. See Known risks for what that means and how to bump it.
+The fledge version is pinned to a fixed commit (`cynkra/fledge@9453c2b`, r-universe 0.1.99.9060) in `fledge-run/action.yml`; it changes only when that SHA is deliberately edited.
+
+## Operations
+
+```sh
+gh workflow run fledge.yaml -R poissonconsulting/fledgerunner -f packages=<pkg>                 # bump one package now
+gh workflow run fledge.yaml -R poissonconsulting/fledgerunner -f packages=<pkg> -f dry-run=true # report only
+gh run list -R poissonconsulting/fledgerunner --workflow fledge.yaml                            # recent runs
+```
+
+Each package's result is in the job named after it.
+A failed job affects only that package; the others in the run continue.
+
+Common failures:
+
+- `Can't parse version headers` / `duplicate version names` / `Result must be length 1, not 0`: a malformed heading in the package's `NEWS.md`. Fix the heading (every top-level heading must be `# <pkg> <version>`, unique, without trailing spaces); the package bumps on the next run.
+- `[remote rejected]` on a tag: a GitHub-side push failure. The atomic push means neither the commit nor the tag landed, so the next run simply retries.
+
+## Migration from per-package callers
+
+Until October 2026 each package carried two caller workflows that invoked reusable workflows in this repository (`.github/workflows/fledge-bump.yaml`, `fledge-tag-on-merge.yaml`, plus `.yml` forwarding shims).
+`tools/sync-ci.sh` now removes those callers; the central job skips any package that still has one, so a package is never bumped by both.
+Once no package carries a caller, the reusable fledge workflows, shims, `workflow-templates/fledge-*`, and `tools/rollout-fledge-automation.sh` will be deleted from this repository, and the App secrets restricted to fledgerunner.
 
 ## One-time setup (org admin)
 
-These steps require organization-owner access and are not done by the workflow files.
-
 ### 1. GitHub App
 
-Create an org-owned GitHub App (suggested name `poisson-fledge-bot`) with repository permissions:
+The org-owned GitHub App `poisson-fledge-bot` (integration id `4076501`) has repository permissions:
 
 - Contents: read and write
 - Pull requests: read and write
 - Metadata: read
 
-The default `GITHUB_TOKEN` is deliberately not used: events it creates do not trigger other workflows, so a tag it pushed would never start `pkgdown` / `R-CMD-check`, and it cannot bypass branch protection.
-A GitHub App token does both.
+The default `GITHUB_TOKEN` is not used: events it creates do not trigger other workflows, so a tag it pushed would never start `pkgdown` / `R-CMD-check`, and it cannot bypass the Packages ruleset.
+The App is installed on all repositories.
 
-Install the app on every non-forked, non-archived package repo.
+### 2. Secrets
 
-### 2. Org secrets
+`FLEDGE_APP_ID` and `FLEDGE_APP_PRIVATE_KEY` are organization secrets.
+They are currently visible to all repositories because packages that have not yet migrated still use them; after migration they will be restricted to `fledgerunner` only.
 
-Store the app credentials as organization secrets available to the package repos:
+### 3. Branch rules
 
-- `FLEDGE_APP_ID` — the app's numeric ID.
-- `FLEDGE_APP_PRIVATE_KEY` — the app's PEM private key.
+The App is on the bypass list of the organization ruleset **"Packages"** (id `17373396`) so the dev path can push the bump commit and tag to `main`.
+The release path still waits for the code-owner review: a queued `gh pr merge --auto` is not a bypass.
 
-The caller workflows forward these to the reusable workflows with `secrets: inherit`.
+### 4. CODEOWNERS
 
-### 3. Branch protection and merge settings
-
-The default branch is governed by the organization ruleset **"Packages"** (id `17373396`),
-which already requires a PR, code-owner review, and one approval on the default branch of all
-packages. Auto-merge is already enabled at the repo level. So the only setting to change is:
-
-- Add the App to the **"Packages" ruleset bypass list** with mode **Always** (Org -> Settings -> Rules -> Rulesets -> Packages -> Bypass list -> Apps -> `poisson-fledge-bot`), so the dev path can push the bump commit and tag directly. This is one org-level change covering all packages. The "Always" bypass does not defeat the release path: a queued `gh pr merge --auto` still waits for the code-owner review.
-
-The App's integration id is `4076501` (the value of `FLEDGE_APP_ID`).
-Classic per-repo branch protection, if any, is redundant where the ruleset is the active control.
-
-### 4. CODEOWNERS dependency
-
-The release path reads the owner of `*` from `.github/CODEOWNERS` to request review.
-This depends on the paused org-wide CODEOWNERS rollout.
-Until a repo has CODEOWNERS, the release-path PR still opens but logs a warning and skips reviewer assignment, and auto-merge will not have a code-owner approval to wait on.
-
-### 5. Pin the engine version
-
-Tag `poissonconsulting/.github` `v1` once tested so the callers' `@v1` reference is stable.
-For initial testing, temporarily change the caller `uses:` line to `@<test-branch>`.
-
-## Rollout
-
-`tools/rollout-fledge-automation.sh` adds the two caller workflows to every non-forked, non-archived repo with a root `DESCRIPTION` (an R package) and opens a draft PR for each.
-It is idempotent (skips repos already carrying `fledge-bump.yaml` or `fledge-bump.yml`, or an open rollout PR) and handles `main` and `master` default branches.
-Run it from a checkout of this repo after the `v1` tag exists:
-
-```sh
-tools/rollout-fledge-automation.sh                     # dry run: list target repos and actions
-tools/rollout-fledge-automation.sh --apply             # create branches + draft PRs
-tools/rollout-fledge-automation.sh [--apply] pkg ...   # explicit packages only
-```
-
-Explicitly named packages skip the fledge-managed (NEWS banner) gate: the engine no-ops until a `v*` tag exists and generates `NEWS.md` itself on the first bump, so the callers are safe to deploy ahead of fledge initialisation.
-
-The PRs are opened as drafts; they are harmless until the App and org secrets are active.
-This pairs with the same governance process that handles CODEOWNERS.
-
-## Testing checklist
-
-Use non-CRAN packages where Joe is the maintainer, so a dev bump cannot affect a CRAN release.
-
-1. **Dev / auto path** on a dev-version package (e.g. `gsdd`, `0.3.0.9000`).
-   Trigger `fledge-bump` via `workflow_dispatch`.
-   Confirm it bumps to `0.3.0.9001`, updates `NEWS.md`, commits to `main`, pushes the tag, and that `R-CMD-check` / `pkgdown` fire.
-2. **Release path** on a release-version package (e.g. `evrfish`, `0.7.0`) with a `.github/CODEOWNERS` naming Joe.
-   Confirm a `fledge-bump` PR opens, Joe is requested as reviewer, and auto-merge is enabled.
-   Approve it and confirm *fledge-tag-on-merge* tags `0.7.0.9000` on `main`.
-3. **PR recreation** with an open `fledge-bump` PR: push a commit to `main`, re-run, and confirm the old PR closes and a new one opens including the change.
-   Re-run with no new commits and confirm the PR is left untouched.
-4. **No-op**: re-run with no commits since the last tag and confirm a clean exit.
+The release path requests review from the owner of `*` in `.github/CODEOWNERS`.
+Without it the "Start dev cycle" PR still opens but has no reviewer requested.
 
 ## Known risks
 
-- fledge is built for interactive use; running `bump_version()` / `tag_version()` headless must be validated on the first dry run before rollout.
-- NEWS quality depends on commit-message content, unchanged from current local fledge use.
-- Recreating a PR for new commits discards any prior approval, by design.
-- Scheduled workflows are disabled after 60 days of repo inactivity.
-- A `CRAN-SUBMISSION` file that is never deleted holds the bump indefinitely; the nightly run logs a notice each day, so check for a stale file if a package stops bumping after a release.
-- The dev version of fledge is pinned to a fixed commit (currently `cynkra/fledge@9453c2b`, 2026-07-02, r-universe `0.1.99.9060`) in the `Install fledge (dev)` step of both `fledge-bump.yaml` and `fledge-tag-on-merge.yaml`. It does not update itself: a fix or messaging improvement on `cynkra/fledge` main only takes effect once someone deliberately edits the pinned SHA in both files, the same way the `@v1` engine tag is bumped deliberately rather than tracking `main`. Merge a new pin to `main` and release it with `tools/promote-v1.sh`, which runs the canary packages first; note the canaries exercise the CI reusables, not the fledge ones, so after promoting a fledge change check the next nightly `fledge-bump` runs across the fleet.
+- fledge is built for interactive use; a package whose `NEWS.md` it cannot parse fails nightly until the file is fixed.
+- NEWS quality depends on commit-message content.
+- Recreating a release-path PR for new commits discards any prior approval, by design.
+- A `CRAN-SUBMISSION` file that is never deleted holds the bump indefinitely; the run logs a notice each time.
+- The release path (Start dev cycle PR, then tag on the next run) had not yet run centrally at the time of the October 2026 migration; watch the first one.
+- GitHub disables scheduled workflows after 60 days without activity in *public* repositories; fledgerunner is private, and its Dependabot PRs also keep it active.
