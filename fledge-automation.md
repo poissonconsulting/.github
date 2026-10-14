@@ -30,6 +30,8 @@ A package moves over when the PR removing its two fledge files is merged; the ce
 
 ## Is my package fledge-managed?
 
+To see exactly what happens to a package, open the latest `fledge` run in fledgerunner's Actions tab: the `plan` job lists every package with its decision (for example `include`, `skip:up-to-date`, `skip:fork`), and each bumped package has a job named after it.
+
 Look at the package's `NEWS.md`, not its workflow files.
 If it starts with the fledge banner, the package is fledge-managed and the central job bumps it each night:
 
@@ -46,8 +48,6 @@ A package with the banner is still skipped if it:
 - is listed in fledgerunner's `config/fledge-exclude.txt` (sandboxes and templates);
 - has no `v*` tag yet (fledge was never started there; nothing happens until the first tag exists);
 - still carries the old `fledge-bump` workflow file (it stays on the old per-package setup until its migration PR merges).
-
-To see exactly what happens to a package, open the latest `fledge` run in fledgerunner's Actions tab: the `plan` job lists every package with its decision (for example `include`, `skip:up-to-date`, `skip:fork`), and each bumped package has a job named after it.
 
 ## What it does
 
