@@ -30,6 +30,7 @@ check "fledge tag caller removed"        no  fledge-tag-on-merge.yml true false 
 check "legacy R-CMD-check.yml replaced"  no  R-CMD-check.yml       true  false false false false
 check "legacy pkgdown.yml replaced"      no  pkgdown.yml           true  false false false false
 check "legacy coverage.yml replaced"     no  test-coverage.yml     true  false false false false
+check "legacy coverage.yaml replaced"    no  coverage.yaml         true  false false false false
 check "unknown workflow preserved"       keep bookdown.yaml        true  false true  false false
 check "paper preserved"                  keep paper.yaml           true  false false false false
 
@@ -59,6 +60,11 @@ grep -q "^new" "$tmp/wf/test-coverage.yaml" && echo "ok   existing caller refres
 setup R-CMD-check.yml test-coverage.yml pkgdown.yml fledge-bump.yml fledge-tag-on-merge.yml paper.yaml
 sync_workflows "$tmp/wf" "$rendered" false false false
 expect_files "legacy yml migrated, paper kept" "R-CMD-check.yaml paper.yaml pkgdown.yaml test-coverage.yaml"
+
+# slobr: old-style coverage.yaml counts as the owner keeping test coverage
+setup R-CMD-check.yaml coverage.yaml pkgdown.yaml
+sync_workflows "$tmp/wf" "$rendered" false false false
+expect_files "legacy coverage.yaml becomes test-coverage.yaml" "R-CMD-check.yaml pkgdown.yaml test-coverage.yaml"
 
 [ "$fails" -eq 0 ] || { echo "$fails test(s) failed"; exit 1; }
 echo "all passed"
