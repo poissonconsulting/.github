@@ -26,7 +26,28 @@ A package moves over when the PR removing its two fledge files is merged; the ce
 - Do not hand-edit `NEWS.md` or the dev version (unchanged).
 - CRAN releases are unchanged: committing the `CRAN-SUBMISSION` file pauses bumps until the release is accepted and the file is removed.
 - After a release you still get a "Start dev cycle" PR to review and merge. The new version tag is now added by the next nightly run rather than straight after the merge.
-- To bump straight away instead of waiting for the night, the job is started from fledgerunner's Actions tab (see [Operations](#operations)). fledgerunner is private; ask a repo admin if you do not have access.
+- To bump straight away instead of waiting for the night, the job is started from fledgerunner's Actions tab (see [Operations](#operations)). fledgerunner is private: the Infrastructure team can view its runs and logs; starting a run needs write access, so ask Joe.
+
+## Is my package fledge-managed?
+
+To see exactly what happens to a package, open the latest `fledge` run in fledgerunner's Actions tab: the `plan` job lists every package with its decision (for example `include`, `skip:up-to-date`, `skip:fork`), and each bumped package has a job named after it.
+
+Look at the package's `NEWS.md`, not its workflow files.
+If it starts with the fledge banner, the package is fledge-managed and the central job bumps it each night:
+
+```
+<!-- NEWS.md is maintained by https://fledge.cynkra.com, contributors should not edit this file -->
+<!-- NEWS.md is maintained by https://cynkra.github.io/fledge, do not edit -->
+```
+
+Signs it is working: commits titled `fledge: Bump version to X.Y.Z.9NNN` by `poisson-fledge-bot[bot]`, and matching `v*` tags.
+
+A package with the banner is still skipped if it:
+
+- is a fork (a fork's `main` stays a mirror of upstream);
+- is listed in fledgerunner's `config/fledge-exclude.txt` (sandboxes and templates);
+- has no `v*` tag yet (fledge was never started there; nothing happens until the first tag exists);
+- still carries the old `fledge-bump` workflow file (it stays on the old per-package setup until its migration PR merges).
 
 ## What it does
 
