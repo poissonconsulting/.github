@@ -1,7 +1,8 @@
 # fledge version-bump automation
 
 Nightly automated fledge dev-version bumps for non-forked, non-archived `poissonconsulting` R packages.
-Since October 2026 this runs centrally from the private repository [`poissonconsulting/fledgerunner`](https://github.com/poissonconsulting/fledgerunner), not from workflows inside each package.
+Since October 2026 this runs centrally from the private repository [`poissonconsulting/poisrunner`](https://github.com/poissonconsulting/poisrunner), not from workflows inside each package.
+poisrunner was called `fledgerunner` until 2026-10-22; links using the old name redirect.
 
 ## In short (for package maintainers)
 
@@ -11,7 +12,7 @@ If there are any, it bumps the dev version (e.g. 0.3.0.9001 to 0.3.0.9002), adds
 
 **What changed in October 2026:** only *where* that nightly job runs.
 Each package used to carry its own copy of the job (`.github/workflows/fledge-bump.yaml` and `fledge-tag-on-merge.yaml`).
-It now runs from one central place, `poissonconsulting/fledgerunner`, which handles every package.
+It now runs from one central place, `poissonconsulting/poisrunner`, which handles every package.
 A package moves over when the PR removing its two fledge files is merged; the central job takes over from the next night.
 
 **Why:**
@@ -26,11 +27,11 @@ A package moves over when the PR removing its two fledge files is merged; the ce
 - Do not hand-edit `NEWS.md` or the dev version (unchanged).
 - CRAN releases are unchanged: committing the `CRAN-SUBMISSION` file pauses bumps until the release is accepted and the file is removed.
 - After a release you still get a "Start dev cycle" PR to review and merge. The new version tag is now added by the next nightly run rather than straight after the merge.
-- To bump straight away instead of waiting for the night, the job is started from fledgerunner's Actions tab (see [Operations](#operations)). fledgerunner is private: the Infrastructure team can view its runs and logs; starting a run needs write access, so ask Joe.
+- To bump straight away instead of waiting for the night, the job is started from poisrunner's Actions tab (see [Operations](#operations)). poisrunner is private: the Infrastructure team can view its runs and logs; starting a run needs write access, so ask Joe.
 
 ## Is my package fledge-managed?
 
-To see exactly what happens to a package, open the latest `fledge` run in fledgerunner's Actions tab: the `plan` job lists every package with its decision (for example `include`, `skip:up-to-date`, `skip:fork`), and each bumped package has a job named after it.
+To see exactly what happens to a package, open the latest `fledge` run in poisrunner's Actions tab: the `plan` job lists every package with its decision (for example `include`, `skip:up-to-date`, `skip:fork`), and each bumped package has a job named after it.
 
 Look at the package's `NEWS.md`, not its workflow files.
 If it starts with the fledge banner, the package is fledge-managed and the central job bumps it each night:
@@ -45,7 +46,7 @@ Signs it is working: commits titled `fledge: Bump version to X.Y.Z.9NNN` by `poi
 A package with the banner is still skipped if it:
 
 - is a fork (a fork's `main` stays a mirror of upstream);
-- is listed in fledgerunner's `config/fledge-exclude.txt` (sandboxes and templates);
+- is listed in poisrunner's `config/fledge-exclude.txt` (sandboxes and templates);
 - has no `v*` tag yet (fledge was never started there; nothing happens until the first tag exists);
 - still carries the old `fledge-bump` workflow file (it stays on the old per-package setup until its migration PR merges).
 
@@ -65,7 +66,7 @@ The bumps are pushed by the `poisson-fledge-bot` GitHub App, so they trigger the
 
 ## Where it runs
 
-| Path in `poissonconsulting/fledgerunner` | Role |
+| Path in `poissonconsulting/poisrunner` | Role |
 | --- | --- |
 | `.github/workflows/fledge.yaml` | Nightly schedule and manual dispatch. A `plan` job selects packages; a matrix `bump` job runs one package per job with an App token scoped to that package. |
 | `tools/fledge-targets.sh` | Selects packages: fledge-managed, not a fork, not excluded, no own fledge caller, and with commits since the tag for its `DESCRIPTION` version (or no such tag). |
@@ -73,7 +74,7 @@ The bumps are pushed by the `poisson-fledge-bot` GitHub App, so they trigger the
 | `.github/actions/fledge-run/action.yml` | Runs fledge for one checked-out package. |
 | `config/fledge-exclude.txt` | Repositories never processed (sandboxes and templates). |
 
-fledgerunner is private because its logs name private packages and echo commit messages.
+poisrunner is private because its logs name private packages and echo commit messages.
 Forks are always skipped: a fork's `main` stays a clean mirror of upstream.
 
 The fledge version is pinned to a fixed commit (`cynkra/fledge@9453c2b`, r-universe 0.1.99.9060) in `fledge-run/action.yml`; it changes only when that SHA is deliberately edited.
@@ -81,9 +82,9 @@ The fledge version is pinned to a fixed commit (`cynkra/fledge@9453c2b`, r-unive
 ## Operations
 
 ```sh
-gh workflow run fledge.yaml -R poissonconsulting/fledgerunner -f packages=<pkg>                 # bump one package now
-gh workflow run fledge.yaml -R poissonconsulting/fledgerunner -f packages=<pkg> -f dry-run=true # report only
-gh run list -R poissonconsulting/fledgerunner --workflow fledge.yaml                            # recent runs
+gh workflow run fledge.yaml -R poissonconsulting/poisrunner -f packages=<pkg>                 # bump one package now
+gh workflow run fledge.yaml -R poissonconsulting/poisrunner -f packages=<pkg> -f dry-run=true # report only
+gh run list -R poissonconsulting/poisrunner --workflow fledge.yaml                            # recent runs
 ```
 
 Each package's result is in the job named after it.
@@ -98,7 +99,7 @@ Common failures:
 
 Until October 2026 each package carried two caller workflows that invoked reusable workflows in this repository (`.github/workflows/fledge-bump.yaml`, `fledge-tag-on-merge.yaml`, plus `.yml` forwarding shims).
 `tools/sync-ci.sh` now removes those callers; the central job skips any package that still has one, so a package is never bumped by both.
-Once no package carries a caller, the reusable fledge workflows, shims, `workflow-templates/fledge-*`, and `tools/rollout-fledge-automation.sh` will be deleted from this repository, and the App secrets restricted to fledgerunner.
+Once no package carries a caller, the reusable fledge workflows, shims, `workflow-templates/fledge-*`, and `tools/rollout-fledge-automation.sh` will be deleted from this repository, and the App secrets restricted to poisrunner.
 
 ## One-time setup (org admin)
 
@@ -116,7 +117,7 @@ The App is installed on all repositories.
 ### 2. Secrets
 
 `FLEDGE_APP_ID` and `FLEDGE_APP_PRIVATE_KEY` are organization secrets.
-They are currently visible to all repositories because packages that have not yet migrated still use them; after migration they will be restricted to `fledgerunner` only.
+They are currently visible to all repositories because packages that have not yet migrated still use them; after migration they will be restricted to `poisrunner` only.
 
 ### 3. Branch rules
 
@@ -135,4 +136,4 @@ Without it the "Start dev cycle" PR still opens but has no reviewer requested.
 - Recreating a release-path PR for new commits discards any prior approval, by design.
 - A `CRAN-SUBMISSION` file that is never deleted holds the bump indefinitely; the run logs a notice each time.
 - The release path (Start dev cycle PR, then tag on the next run) had not yet run centrally at the time of the October 2026 migration; watch the first one.
-- GitHub disables scheduled workflows after 60 days without activity in *public* repositories; fledgerunner is private, and its Dependabot PRs also keep it active.
+- GitHub disables scheduled workflows after 60 days without activity in *public* repositories; poisrunner is private, and its Dependabot PRs also keep it active.
