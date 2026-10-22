@@ -7,7 +7,7 @@
 # packages, check-no-suggests). CRAN packages also get the vendored R-hub workflow (rhub.yaml,
 # dispatch-triggered and r-hub-owned, so distributed as a template not a caller). The bespoke
 # paper.yaml / slack-check-package.yaml workflows are preserved; fledge callers are removed
-# (fledge runs centrally from poissonconsulting/fledgerunner); all other pre-existing
+# (fledge runs centrally from poissonconsulting/poisrunner); all other pre-existing
 # workflows are replaced. Opens one routed PR (normal PR for joethorley-owned
 # repos; otherwise an issue + draft PR assigned to the owner, who marks it ready once checks pass,
 # per the org's issue-first + draft-PR rule for repos the operator does not own).
@@ -451,11 +451,11 @@ while IFS= read -r repo <&3; do
 
 Replace ad hoc workflows with thin callers to the reusable CI in
 $ORG/.github (R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests')$([ "$canary" = true ] && echo ', canary')),
-removing any fledge callers (fledge now runs centrally from $ORG/fledgerunner).${CO_AUTHOR:+
+removing any fledge callers (fledge now runs centrally from $ORG/poisrunner).${CO_AUTHOR:+
 
 Co-Authored-By: $CO_AUTHOR}"
     git push -q -u --force origin "$BRANCH"
-    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests')$([ "$canary" = true ] && echo ', canary'); fledge callers removed (fledge now runs centrally from \`$ORG/fledgerunner\`)."
+    body="Standardizes CI onto the reusable workflows in \`$ORG/.github\` (tier **$tier**, private=$private, jags=$jags, cmdstan=$cmdstan, tex=$tex). Callers: R-CMD-check, test-coverage, pkgdown$([ "$cran" = true ] && echo ', check-no-suggests')$([ "$canary" = true ] && echo ', canary'); fledge callers removed (fledge now runs centrally from \`$ORG/poisrunner\`)."
     default=$(gh api "repos/$ORG/$repo" --jq '.default_branch')
     if [ "$owner" = joethorley ]; then
       gh pr create --repo "$ORG/$repo" --base "$default" --head "$BRANCH" \
