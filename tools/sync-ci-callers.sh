@@ -26,8 +26,9 @@ caller_wanted() {
       if [ "$canary" = true ]; then echo yes; else echo no; fi ;;
     fledge-bump.yaml|fledge-bump.yml|fledge-tag-on-merge.yaml|fledge-tag-on-merge.yml)
       echo no ;;
-    # Legacy .yml copies of managed callers are superseded by the .yaml ones.
-    R-CMD-check.yml|test-coverage.yml|pkgdown.yml|check-no-suggests.yml|rhub.yml)
+    # Legacy .yml copies of managed callers, and old-style coverage.yaml, are superseded by the
+    # standard .yaml callers.
+    R-CMD-check.yml|test-coverage.yml|pkgdown.yml|check-no-suggests.yml|rhub.yml|coverage.yaml|coverage.yml)
       echo no ;;
     *) echo keep ;;
   esac
@@ -53,6 +54,10 @@ sync_workflows() {
     name=$(basename "$f")
     existed=false
     case "$before" in *" $name "*|*" ${name%.yaml}.yml "*) existed=true ;; esac
+    # Old-style coverage workflows (coverage.yaml / .yml) count as keeping test coverage.
+    if [ "$name" = test-coverage.yaml ]; then
+      case "$before" in *" coverage.yaml "*|*" coverage.yml "*) existed=true ;; esac
+    fi
     if [ "$(caller_wanted "$name" "$existed" "$first" "$private" "$cran" "$canary")" = yes ]; then cp "$f" "$wf/$name"; fi
   done
 }
