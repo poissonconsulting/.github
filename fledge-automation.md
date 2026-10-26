@@ -26,6 +26,7 @@ A package moves over when the PR removing its two fledge files is merged; the ce
 - Keep committing as usual. Version bumps and `NEWS.md` still update overnight from your commit messages, so clear commit messages still matter.
 - Do not hand-edit `NEWS.md` or the dev version (unchanged).
 - CRAN releases are unchanged: committing the `CRAN-SUBMISSION` file pauses bumps until the release is accepted and the file is removed.
+  If CRAN accepts the release but the file is left committed, the nightly run opens a PR removing it for you to review.
 - After a release you still get a "Start dev cycle" PR to review and merge. The new version tag is now added by the next nightly run rather than straight after the merge.
 - To bump straight away instead of waiting for the night, the job is started from poisrunner's Actions tab (see [Operations](#operations)). poisrunner is private: the Infrastructure team can view its runs and logs; starting a run needs write access, so ask Joe.
 
@@ -59,6 +60,7 @@ Every day at 07:00 UTC, for each fledge-managed package (root `DESCRIPTION` plus
 - A `fledge: Bump version to <DESCRIPTION version>` commit exists whose tag never landed (for example GitHub rejected the tag push): that commit is tagged instead of bumping again.
 - No commits since the nearest `v*` tag: nothing happens.
 - `CRAN-SUBMISSION` (or legacy `CRAN-RELEASE`) committed on the default branch: a notice is logged and nothing is bumped.
+  If the version recorded in the file is already on CRAN (checked against CRAN's `PACKAGES` index), the file is stale: a `fledge-cran-accepted` PR removing it is opened, requesting review from the CODEOWNERS owner with auto-merge armed, and noting a missing GitHub release for that version. Nothing is opened if such a PR is already open, the package is not yet on CRAN, or the file records no version.
 - Last tag is a **dev** version (`X.Y.Z.9XXX`): `fledge::bump_version("dev")` regenerates `NEWS.md`, bumps `DESCRIPTION`, commits, tags, and pushes the commit and tag to the default branch together (`git push --atomic`, retried).
 - Last tag is a **release** version (`X.Y.Z`): the bump goes onto a `fledge-bump` branch and is opened as a "Start dev cycle" PR requesting review from the CODEOWNERS owner, with auto-merge armed. An open PR is left alone if `main` has not moved, and closed and recreated if it has.
 
@@ -134,6 +136,6 @@ Without it the "Start dev cycle" PR still opens but has no reviewer requested.
 - fledge is built for interactive use; a package whose `NEWS.md` it cannot parse fails nightly until the file is fixed.
 - NEWS quality depends on commit-message content.
 - Recreating a release-path PR for new commits discards any prior approval, by design.
-- A `CRAN-SUBMISSION` file that is never deleted holds the bump indefinitely; the run logs a notice each time.
+- A `CRAN-SUBMISSION` file for a submission CRAN never accepts holds the bump indefinitely; the run logs a notice each time. (A file left behind after acceptance is cleared by a PR, which still needs the owner's review.)
 - The release path (Start dev cycle PR, then tag on the next run) had not yet run centrally at the time of the October 2026 migration; watch the first one.
 - GitHub disables scheduled workflows after 60 days without activity in *public* repositories; poisrunner is private, and its Dependabot PRs also keep it active.
