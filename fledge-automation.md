@@ -27,7 +27,7 @@ A package moves over when the PR removing its two fledge files is merged; the ce
 - Do not hand-edit `NEWS.md` or the dev version (unchanged).
 - CRAN releases are unchanged: committing the `CRAN-SUBMISSION` file pauses bumps until the release is accepted and the file is removed.
   If CRAN accepts the release but the file is left committed, the nightly run opens a PR removing it and merges it straight away (you are notified as reviewer).
-- After a release you still get a "Start dev cycle" PR to review and merge. The new version tag is now added by the next nightly run rather than straight after the merge.
+- After a release a "Start dev cycle" PR is opened and merged automatically (you are notified as reviewer). The new version tag is now added by the next nightly run rather than straight after the merge.
 - To bump straight away instead of waiting for the night, the job is started from poisrunner's Actions tab (see [Operations](#operations)). poisrunner is private: the Infrastructure team can view its runs and logs; starting a run needs write access, so ask Joe.
 
 ## Is my package fledge-managed?
@@ -62,7 +62,7 @@ Every day at 07:00 UTC, for each fledge-managed package (root `DESCRIPTION` plus
 - `CRAN-SUBMISSION` (or legacy `CRAN-RELEASE`) committed on the default branch: a notice is logged and nothing is bumped.
   If the version recorded in the file is already on CRAN (checked against CRAN's `PACKAGES` index), the file is stale: a `fledge-cran-accepted` PR removing it is opened, requesting review from the CODEOWNERS owner and noting a missing GitHub release for that version, and is merged immediately (the bot bypasses review; the change only deletes the file). Nothing is opened if such a PR is already open, the package is not yet on CRAN, or the file records no version.
 - Last tag is a **dev** version (`X.Y.Z.9XXX`): `fledge::bump_version("dev")` regenerates `NEWS.md`, bumps `DESCRIPTION`, commits, tags, and pushes the commit and tag to the default branch together (`git push --atomic`, retried).
-- Last tag is a **release** version (`X.Y.Z`): the bump goes onto a `fledge-bump` branch and is opened as a "Start dev cycle" PR requesting review from the CODEOWNERS owner, who merges it (auto-merge is not armed, so the regenerated `NEWS.md` is reviewed). An open PR is left alone if `main` has not moved, and closed and recreated if it has.
+- Last tag is a **release** version (`X.Y.Z`): the bump goes onto a `fledge-bump` branch and is opened as a "Start dev cycle" PR requesting review from the CODEOWNERS owner, with auto-merge armed, so it merges immediately (the bot bypasses review). An open PR is left alone if `main` has not moved, and closed and recreated if it has.
 
 The bumps are pushed by the `poisson-fledge-bot` GitHub App, so they trigger the package's own CI (R-CMD-check, pkgdown, test-coverage) like any other push.
 
@@ -124,7 +124,7 @@ They are currently visible to all repositories because packages that have not ye
 ### 3. Branch rules
 
 The App is on the bypass list of the organization ruleset **"Packages"** (id `17373396`) so the dev path can push the bump commit and tag to `main`.
-Because the App bypasses the ruleset, a `gh pr merge --auto` it arms merges immediately rather than waiting for review; it is therefore only used for the mechanical CRAN-SUBMISSION cleanup PR, never for "Start dev cycle" PRs (which merged unreviewed until October 2026).
+Because the App bypasses the ruleset, a `gh pr merge --auto` it arms merges immediately rather than waiting for the requested review. This is intended for both bot PRs ("Start dev cycle" and the CRAN-SUBMISSION cleanup); the code owner is notified as reviewer and can revert if needed.
 
 ### 4. CODEOWNERS
 
